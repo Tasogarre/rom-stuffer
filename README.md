@@ -33,43 +33,66 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 *   **Python:** Python 3.6 or higher must be installed on your system.
 *   No external pip packages are required; it uses entirely built-in Python libraries.
 
+## Installation
+
+To use `rom_stuffer`, you can clone the repository to your local machine:
+
+```bash
+git clone https://github.com/Tasogarre/rom-stuffer.git
+cd rom-stuffer
+```
+
+No additional `pip` dependencies are required. Just run it using Python!
+
 ## Usage
+
+By default, `rom_stuffer` runs in **Interactive Mode**. It will scan the source directory for all recognized cartridge ROM extensions, group them, and ask you if you want to process each type.
 
 Open your terminal or Command Prompt and run the script using the following syntax:
 
 ```bash
-python compress_roms.py --source "<source_directory>" --type "<file_extension>" --dest "<backup_directory>"
+python compress_roms.py --source "<source_directory>" --dest "<backup_directory>"
 ```
+
+### Supported Extensions
+
+The built-in library recognizes the following cartridge ROM extensions automatically:
+
+*   **Nintendo:** `.nes`, `.sfc`, `.smc`, `.fig`, `.swc`, `.gb`, `.gbc`, `.gba`, `.fds`
+*   **Sega:** `.bin`, `.gen`, `.md`, `.smd`, `.sms`, `.gg`
+*   **Atari:** `.a26`, `.a52`, `.a78`, `.j64`, `.lnx`, `.atr`, `.atx`, `.xfd`, `.xex`, `.cas`, `.st`
+*   **Amiga:** `.adf`, `.dms`, `.fdi`, `.ipf`, `.hdf`, `.hdz`
+*   **Other:** `.ws`, `.wsc`, `.ngp`, `.ngc`
+
+> [!NOTE]
+> **N64 Exclusion:** Nintendo 64 extensions (`.n64`, `.z64`) are explicitly excluded. N64 emulation is highly demanding on RetroArch, and the overhead of extracting files from `.zip` archives on lower-powered devices can severely exacerbate audio/video stuttering.
+
+> [!NOTE]
+> **MAME / Arcade Exclusion:** Arcade ROMs are not supported by this tool because they are already distributed and required to be in `.zip` or `.7z` format by default. You should never decompress MAME ROMs.
 
 ### CLI Arguments
 
 | Argument | Short | Description |
 | :--- | :--- | :--- |
 | `--source` | `-s` | **(Required)** The directory to scan for ROMs. The script searches recursively through all subfolders. |
-| `--type` | `-t` | **(Required)** The file extension to target (e.g., `.gba`, `.sfc`, `.nes`). You do not strictly need the leading dot, but it is recommended. |
 | `--dest` | `-d` | **(Required)** The destination directory where the original, uncompressed files will be safely moved. |
+| `--type` | `-t` | **(Optional)** A specific file extension to target (e.g., `.gba`). If provided, it bypasses the interactive prompts and only processes this exact type. |
 | `--help` | `-h` | Shows the help menu and exits. |
 
 ## Examples
 
-### Example 1: Basic Windows Usage
-Compressing all Game Boy Advance games on your SD card and backing up the originals to an external hard drive:
+### Example 1: Interactive Scan (Recommended)
+Scanning your entire SD card ROMs folder and backing up originals to an external drive:
 
-```cmd
-python compress_roms.py --source "E:\ROMS\gba" --type ".gba" --dest "D:\RetroBackups\Uncompressed\GBA"
+```bash
+python compress_roms.py --source "E:\ROMS" --dest "D:\RetroBackups\Uncompressed"
 ```
 
-### Example 2: Deeply Nested Folders
-If your source folder looks like this:
-```text
-E:\ROMS\snes\
-├── Action\
-│   └── Super Metroid.sfc
-└── RPG\
-    └── Chrono Trigger.sfc
-```
+*The script will find `.gba` games, list the folders they are in, ask if you want to compress them, then move on to `.nes`, `.sfc`, etc.*
 
-Running the script:
+### Example 2: Headless/Automated Usage
+If you want to bypass the interactive prompts (e.g., in a script) and only compress a specific format like SNES:
+
 ```bash
 python compress_roms.py -s "E:\ROMS\snes" -t ".sfc" -d "D:\Backups\snes_raw"
 ```
