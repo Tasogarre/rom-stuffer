@@ -1,6 +1,6 @@
 # LLM Handover Document: rom_stuffer
 
-**Repository:** [https://github.com/Tasogarre/rom_stuffer](https://github.com/Tasogarre/rom_stuffer)
+**Repository:** [https://github.com/Tasogarre/rom-stuffer](https://github.com/Tasogarre/rom-stuffer)
 
 ## Introduction
 Hello! If you are an AI reading this, this document brings you fully up to speed on the `rom_stuffer` project. This project was conceptualized and built to solve a specific workflow for managing retro gaming ROMs on Windows, specifically targeting handheld emulator devices like the R36S, R36XX, and Ayn Thor.

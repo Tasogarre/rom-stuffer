@@ -1,6 +1,6 @@
 # rom_stuffer
 
-**Repository:** [https://github.com/Tasogarre/rom_stuffer](https://github.com/Tasogarre/rom_stuffer)
+**Repository:** [https://github.com/Tasogarre/rom-stuffer](https://github.com/Tasogarre/rom-stuffer)
 
 `rom_stuffer` is a command-line Python utility designed to streamline the management of retro gaming ROMs. It recursively scans a directory for specific ROM files, compresses each game into its own highly-compatible `.zip` archive, and safely moves the original uncompressed files to a backup location while perfectly preserving your folder structure.
 
