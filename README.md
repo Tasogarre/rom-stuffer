@@ -26,12 +26,13 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 2.  **Optimized for Emulators:** Emulators hate "solid" archives or ZIPs with multiple games in them. `rom_stuffer` ensures every single ROM gets its own individual `.zip` file, which is exactly what RetroArch expects.
 3.  **Fast Decompression:** Uses "Normal" compression levels rather than "Ultra." This ensures that lower-powered handhelds can instantly decompress the game on-the-fly without stuttering.
 4.  **Organized Backups:** Moving your uncompressed files into a single dump folder is messy. `rom_stuffer` recreates your exact subdirectory structure in the backup folder automatically.
+5.  **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed error report both to the screen (via a beautiful TUI) and to a text log file.
 
 ## Requirements
 
 *   **OS:** Windows, macOS, or Linux.
 *   **Python:** Python 3.6 or higher must be installed on your system.
-*   No external pip packages are required; it uses entirely built-in Python libraries.
+*   **Dependencies:** The `rich` Python library is required for the Text User Interface and reporting.
 
 ## Installation
 
@@ -42,7 +43,13 @@ git clone https://github.com/Tasogarre/rom-stuffer.git
 cd rom-stuffer
 ```
 
-No additional `pip` dependencies are required. Just run it using Python!
+Install the required dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Then, run the tool using Python!
 
 ## Usage
 
