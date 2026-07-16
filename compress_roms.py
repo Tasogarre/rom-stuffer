@@ -29,23 +29,90 @@ except ImportError:
     print("Error: The 'rich' library is required. Please install it using: pip install -r requirements.txt")
     sys.exit(1)
 
-# A single cohesive palette used everywhere via semantic style names, so the whole
-# TUI reads as one design instead of ad-hoc colours scattered through the code.
-THEME = Theme({
-    "brand": "bold #c792ea",       # app identity (soft violet)
-    "accent": "#82aaff",           # section headings, highlights (blue)
-    "info": "#89ddff",             # neutral information (cyan)
-    "success": "bold #c3e88d",     # good outcomes (green)
-    "warn": "#ffcb6b",             # cautions (amber)
-    "danger": "bold #ff5370",      # errors / refusals (red)
-    "muted": "dim",                # secondary text
-    "value": "bold #ffcb6b",       # metric values in tables
-    "path": "#82aaff",             # filesystem paths
-})
+# --------------------------------------------------------------------------- #
+# Themes. Each is a full NES-era skin: a semantic colour palette (so the whole
+# TUI reads as one design) plus a pixel-art emblem and title drawn in that
+# palette. Styles are referenced everywhere by semantic name (brand/accent/...),
+# so switching the theme re-skins the entire interface.
+# --------------------------------------------------------------------------- #
 
-console = Console(theme=THEME)
+# The Legend of Zelda — gold Triforce (three triangles, clean centre gap), on black.
+ZELDA_ART = (
+    "[brand]     ◢◣     [/brand]\n"
+    "[brand]    ◢██◣    [/brand]\n"
+    "[brand]   ◢████◣   [/brand]\n"
+    "[brand]  ◢◣    ◢◣  [/brand]\n"
+    "[brand] ◢██◣  ◢██◣ [/brand]\n"
+    "[brand]◢████◣◢████◣[/brand]"
+)
+ZELDA_TITLE = "[brand]T H E   L E G E N D   O F   Z E L D A[/brand]"
+
+# Metroid — bio-cyan membrane dome, three red nuclei, orange mandibles below.
+METROID_ART = (
+    "[accent]     ▁▄▄▄▄▄▁     [/accent]\n"
+    "[accent]   ◢█████████◣   [/accent]\n"
+    "[accent]  ██[/accent] [danger]◉[/danger] [danger]◉[/danger] [danger]◉[/danger] [accent]██  [/accent]\n"
+    "[accent]  ◥█████████◤  [/accent]\n"
+    "[brand]   ▜█▙ ▜█▙ ▜█▙   [/brand]\n"
+    "[brand]    ▚   ▚   ▚    [/brand]"
+)
+METROID_TITLE = "[brand]▗▄ M E T R O I D ▄▖[/brand]"
+
+THEMES: dict[str, dict] = {
+    "zelda": {
+        "styles": {
+            "brand": "bold #f8c000",     # Triforce gold
+            "accent": "#38c020",         # Link green
+            "info": "#80d010",           # bright leaf green
+            "success": "bold #38c020",
+            "warn": "#f8c000",           # gold caution
+            "danger": "bold #d82800",    # Ganon red
+            "muted": "dim #b08040",      # aged parchment
+            "value": "bold #f8c000",
+            "path": "#80d010",
+        },
+        "art": ZELDA_ART,
+        "title": ZELDA_TITLE,
+        "tagline": "It's dangerous to go alone!  Compress your cartridges first.",
+        "border": "#f8c000",
+    },
+    "metroid": {
+        "styles": {
+            "brand": "bold #f85000",     # Samus armour orange
+            "accent": "#38c0f8",         # bio-cyan
+            "info": "#40e0a0",           # Metroid membrane green
+            "success": "bold #40e0a0",
+            "warn": "#f8d000",           # Samus visor yellow
+            "danger": "bold #f8005c",    # nuclei magenta-red
+            "muted": "dim #7088a0",      # cavern steel
+            "value": "bold #f8d000",
+            "path": "#38c0f8",
+        },
+        "art": METROID_ART,
+        "title": METROID_TITLE,
+        "tagline": "The last cartridge is in captivity.  The galaxy is at peace.",
+        "border": "#f85000",
+    },
+}
+DEFAULT_THEME = "zelda"
+
+console = Console()
+_active_theme = {"name": DEFAULT_THEME}
+
+
+def apply_theme(name: str) -> None:
+    """Activate a theme by name, re-skinning every semantic style."""
+    if name not in THEMES:
+        name = DEFAULT_THEME
+    _active_theme["name"] = name
+    console.push_theme(Theme(THEMES[name]["styles"]))
+
 
 APP_TAGLINE = "Compress cartridge ROMs into RetroArch-ready .zip archives"
+
+# Ensure semantic styles always resolve, even when compress_roms() is called
+# directly (e.g. from tests) without the CLI selecting a theme first.
+apply_theme(DEFAULT_THEME)
 
 # Named constants
 FAST_COPY_BUFFER_BYTES: int = 4 * 1024 * 1024   # 4 MB: suits typical SD/flash page sizes
@@ -89,14 +156,17 @@ SUPPORTED_EXTENSIONS: set = {
 # --------------------------------------------------------------------------- #
 
 def print_header() -> None:
-    """Render the application banner at the top of a session."""
-    title = Text("R O M   S T U F F E R", style="brand", justify="center")
-    tagline = Text(APP_TAGLINE, style="muted", justify="center")
+    """Render the themed application banner (emblem + title) at the top of a session."""
+    theme = THEMES[_active_theme["name"]]
+    art = Text.from_markup(theme["art"], justify="center")
+    title = Text.from_markup(theme["title"], justify="center")
+    sub = Text("ROM STUFFER", style="muted", justify="center")
+    tagline = Text(theme["tagline"], style="muted", justify="center")
     console.print()
     console.print(Panel(
-        Align.center(Group(title, tagline)),
+        Align.center(Group(art, Text(), title, sub, Text(), tagline)),
         box=box.DOUBLE,
-        border_style="brand",
+        border_style=theme["border"],
         padding=(1, 4),
     ))
 
@@ -817,14 +887,29 @@ if __name__ == "__main__":
         "--fresh", action="store_true",
         help="Discard any saved progress in the destination and start a brand-new scan.",
     )
+    parser.add_argument(
+        "--theme", choices=sorted(THEMES.keys()), default=None,
+        help="Visual theme: 'zelda' (default) or 'metroid'.",
+    )
 
     args = parser.parse_args()
 
     provided_args = [
         args.source, args.dest, args.type, args.sdcard,
-        args.dry_run, args.no_recursive, args.resume, args.fresh,
+        args.dry_run, args.no_recursive, args.resume, args.fresh, args.theme,
     ]
     interactive_mode = not any(provided_args)
+
+    # Theme: explicit flag wins; otherwise ask in the TUI, else default.
+    if args.theme:
+        apply_theme(args.theme)
+    elif interactive_mode:
+        choice = Prompt.ask(
+            "Choose a theme",
+            choices=sorted(THEMES.keys()),
+            default=DEFAULT_THEME,
+        )
+        apply_theme(choice)
 
     print_header()
 

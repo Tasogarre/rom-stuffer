@@ -178,7 +178,24 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 | `--level` | `-l` | **(Optional)** DEFLATE compression level 1–9. Default: `6` (Normal). Level 6 is the recommended balance for RetroArch handhelds — do not go higher without testing on your device. |
 | `--resume` | | **(Optional)** Resume a previously interrupted job from its saved progress, skipping the full rescan. See [Resuming an interrupted job](#resuming-an-interrupted-job). |
 | `--fresh` | | **(Optional)** Discard any saved progress in the destination and start a brand-new scan. |
+| `--theme` | | **(Optional)** Visual theme: `zelda` (default) or `metroid`. See [Themes](#themes). |
 | `--help` | `-h` | Show the help menu and exit. |
+
+---
+
+## Themes
+
+The interactive UI ships with two retro 8-bit skins. Launch with no arguments and it asks which you'd like; or pick one up front with `--theme`:
+
+```bash
+python compress_roms.py --theme zelda      # gold Triforce, Link-green (default)
+python compress_roms.py --theme metroid    # Samus orange, bio-cyan Metroid
+```
+
+- **`zelda`** — *The Legend of Zelda.* Gold Triforce emblem, Link-green highlights, a "It's dangerous to go alone!" welcome.
+- **`metroid`** — *Metroid.* A cyan Metroid creature with red nuclei, Samus-armour orange, and a Samus-visor-yellow caution panel.
+
+Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours.
 
 ---
 
