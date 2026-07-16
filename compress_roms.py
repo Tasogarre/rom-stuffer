@@ -100,17 +100,20 @@ def build_zip_path(file_path: Path, claimed: set[Path]) -> Path:
     """Return the target .zip path for file_path.
 
     Uses Game.zip in the common case; falls back to Game_gb.zip / Game_gbc.zip
-    when the default name is already claimed by another file in the current batch.
-    The claimed set is updated in-place.
+    when the default name is already taken. A name is "taken" if another file in
+    this session already claimed it (the `claimed` set, which spans every batch so
+    interactive per-extension runs don't collide) OR a file already exists at that
+    path on disk (a prior run, or the batch that just wrote it). The claimed set is
+    updated in-place.
     """
     default = file_path.with_suffix('.zip')
-    if default not in claimed:
+    if default not in claimed and not default.exists():
         claimed.add(default)
         return default
     stem_ext = f"{file_path.stem}_{file_path.suffix.lstrip('.')}"
     candidate = file_path.parent / f"{stem_ext}.zip"
     counter = 1
-    while candidate in claimed:
+    while candidate in claimed or candidate.exists():
         candidate = file_path.parent / f"{stem_ext}_{counter}.zip"
         counter += 1
     claimed.add(candidate)
@@ -124,8 +127,16 @@ def compress_batch(
     metrics: SessionMetrics,
     sdcard_path: Path | None = None,
     compress_level: int = 6,
+    claimed_zips: set[Path] | None = None,
 ) -> None:
     dry_run = metrics.dry_run
+
+    # Zip paths already claimed this session. Passed in by compress_roms so it spans
+    # every batch — interactive mode calls this once per extension, and Game.gb's
+    # Game.zip must still block Game.gbc in the next batch. Falls back to a local set
+    # for standalone calls.
+    if claimed_zips is None:
+        claimed_zips = set()
 
     # Single stat pass — one syscall per file, result reused throughout the loop.
     sized: list[tuple[Path, int]] = []
@@ -137,10 +148,6 @@ def compress_batch(
             sz = 0
         sized.append((f, sz))
         total_bytes += sz
-
-    # Track which .zip paths this batch has already claimed, to detect within-batch
-    # name collisions (e.g. Game.gb and Game.gbc in the same folder).
-    claimed_zips: set[Path] = set()
 
     with Progress(
         SpinnerColumn(),
@@ -353,6 +360,10 @@ def compress_roms(
     metrics = SessionMetrics()
     metrics.dry_run = dry_run
 
+    # One claimed-zip set for the whole session so name collisions are caught across
+    # the separate per-extension batches of interactive mode, not just within one.
+    claimed_zips: set[Path] = set()
+
     if dry_run:
         console.print(Panel(
             "[bold cyan]DRY RUN MODE ENABLED:[/bold cyan] No files will be modified.",
@@ -410,7 +421,7 @@ def compress_roms(
             return
 
         console.print(f"Found [bold]{len(files_to_process)}[/bold] files to process.")
-        compress_batch(files_to_process, source_path, dest_path, metrics, sdcard_path, compress_level)
+        compress_batch(files_to_process, source_path, dest_path, metrics, sdcard_path, compress_level, claimed_zips)
         generate_reports(metrics, dest_dir)
         return
 
@@ -445,7 +456,7 @@ def compress_roms(
             console.print(f"  - ... and {len(folders) - SCAN_FOLDER_SAMPLE} more")
 
         if Confirm.ask(f"Do you want to compress and move these [bold]{ext}[/bold] files?"):
-            compress_batch(files, source_path, dest_path, metrics, sdcard_path, compress_level)
+            compress_batch(files, source_path, dest_path, metrics, sdcard_path, compress_level, claimed_zips)
         else:
             console.print(f"[yellow]Skipping {ext} files.[/yellow]")
             for f in files:
