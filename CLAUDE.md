@@ -8,6 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running the script
 
+Requires Python 3.8+.
+
 ```bash
 pip install -r requirements.txt
 
@@ -32,10 +34,11 @@ Everything lives in `compress_roms.py`:
 
 - `SUPPORTED_EXTENSIONS` - the hardcoded allowlist of cartridge ROM extensions. CD-based systems (PS1, Saturn), N64, NDS, and MAME arcade are intentionally excluded and must stay excluded.
 - `SessionMetrics` - accumulates counts, byte totals, errors, and skipped files across all batches in a session.
-- `compress_batch()` - the core loop: for each file, creates a ZIP (one ROM per ZIP, same name, DEFLATE level 6), optionally syncs to SD card via `fast_sd_copy()`, then moves the original to the backup destination preserving relative path.
-- `fast_sd_copy()` - uses `shutil.copyfileobj` with a 16MB buffer to maximize sequential write throughput on flash media. Do not parallelize this - flash memory controllers perform poorly under parallel I/O.
-- `generate_reports()` - renders Rich tables to the console and writes a plain-text `rom_stuffer_report.txt` to the backup destination.
-- `compress_roms()` - orchestrates a session: validates paths, optionally prompts for SD card, then either processes a single extension (headless) or interactively groups files by extension and prompts the user for each.
+- `build_zip_path(file_path, claimed)` - returns the target `.zip` path for a source file. Uses `Game.zip` in the common case; falls back to `Game_gb.zip` / `Game_gbc.zip` when two files in the same folder share a stem but differ in extension. `claimed` is a `set[Path]` updated in-place to prevent within-batch collisions.
+- `compress_batch()` - the core loop: performs a single stat pass to collect `(Path, size)` pairs, then for each file writes to a `.tmp` before atomically replacing to avoid leaving corrupt archives, syncs to the SD card via `fast_sd_copy()`, and moves the original to the backup destination preserving relative path. `original_size` is always bound before the try so the `finally` progress advance never raises.
+- `fast_sd_copy()` - uses `shutil.copyfileobj` with a 4 MB buffer and `os.fsync()` to maximise sequential write throughput on flash media and confirm durability. Do not parallelize this - flash memory controllers perform poorly under parallel I/O.
+- `generate_reports()` - renders Rich tables to the console and writes a plain-text `rom_stuffer_report.txt` to the backup destination. Dry-run runs are labelled as estimates.
+- `compress_roms()` - orchestrates a session: validates paths (including dest-inside-source guard), validates and normalises `--type`, optionally prompts for SD card, then either processes a single extension (headless) or interactively groups files by extension and prompts the user for each.
 
 ## Key design constraints
 
