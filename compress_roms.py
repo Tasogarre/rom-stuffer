@@ -10,21 +10,42 @@ import sys
 from collections import defaultdict
 
 try:
-    from rich.console import Console
+    from rich import box
+    from rich.align import Align
+    from rich.console import Console, Group
     from rich.markup import escape
     from rich.panel import Panel
     from rich.table import Table
+    from rich.text import Text
     from rich.progress import (
         Progress, SpinnerColumn, TextColumn, BarColumn,
         TaskProgressColumn, TransferSpeedColumn, TimeRemainingColumn,
+        MofNCompleteColumn,
     )
-    from rich.prompt import Confirm, Prompt
+    from rich.prompt import Confirm, IntPrompt, Prompt
+    from rich.theme import Theme
     from rich import print as rprint
 except ImportError:
     print("Error: The 'rich' library is required. Please install it using: pip install -r requirements.txt")
     sys.exit(1)
 
-console = Console()
+# A single cohesive palette used everywhere via semantic style names, so the whole
+# TUI reads as one design instead of ad-hoc colours scattered through the code.
+THEME = Theme({
+    "brand": "bold #c792ea",       # app identity (soft violet)
+    "accent": "#82aaff",           # section headings, highlights (blue)
+    "info": "#89ddff",             # neutral information (cyan)
+    "success": "bold #c3e88d",     # good outcomes (green)
+    "warn": "#ffcb6b",             # cautions (amber)
+    "danger": "bold #ff5370",      # errors / refusals (red)
+    "muted": "dim",                # secondary text
+    "value": "bold #ffcb6b",       # metric values in tables
+    "path": "#82aaff",             # filesystem paths
+})
+
+console = Console(theme=THEME)
+
+APP_TAGLINE = "Compress cartridge ROMs into RetroArch-ready .zip archives"
 
 # Named constants
 FAST_COPY_BUFFER_BYTES: int = 4 * 1024 * 1024   # 4 MB: suits typical SD/flash page sizes
@@ -61,6 +82,45 @@ SUPPORTED_EXTENSIONS: set = {
     # Note: N64 and NDS are EXCLUDED due to size and performance overhead on low-end devices.
     # Note: MAME arcade ROMs are already zipped by default, so they are excluded.
 }
+
+
+# --------------------------------------------------------------------------- #
+# TUI presentation helpers — keep all styling in one place for a cohesive look.
+# --------------------------------------------------------------------------- #
+
+def print_header() -> None:
+    """Render the application banner at the top of a session."""
+    title = Text("R O M   S T U F F E R", style="brand", justify="center")
+    tagline = Text(APP_TAGLINE, style="muted", justify="center")
+    console.print()
+    console.print(Panel(
+        Align.center(Group(title, tagline)),
+        box=box.DOUBLE,
+        border_style="brand",
+        padding=(1, 4),
+    ))
+
+
+def print_warning_banner() -> None:
+    """The cartridge-only safety warning, styled as a caution panel."""
+    console.print(Panel(
+        Text.from_markup(
+            "[warn]⚠  Cartridge-based systems only.[/warn]\n"
+            "Do [danger]not[/danger] use this for CD-based games (PS1, Saturn, Sega CD) — "
+            "convert those to [info].chd[/info] instead.\n"
+            "N64, NDS and MAME are intentionally excluded too."
+        ),
+        title="[warn]Please read[/warn]",
+        box=box.ROUNDED,
+        border_style="warn",
+        padding=(0, 2),
+    ))
+
+
+def section(title: str) -> None:
+    """A titled horizontal rule that separates the phases of a run."""
+    console.print()
+    console.rule(f"[accent]{title}[/accent]", style="accent", align="left")
 
 
 class SessionMetrics:
@@ -261,16 +321,17 @@ def compress_batch(
         total_bytes += sz
 
     with Progress(
-        SpinnerColumn(),
+        SpinnerColumn(style="accent"),
         TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
+        BarColumn(bar_width=None, complete_style="accent", finished_style="success"),
         TaskProgressColumn(),
         TransferSpeedColumn(),
-        TimeRemainingColumn(),
+        TimeRemainingColumn(compact=True),
         console=console,
+        expand=True,
     ) as progress:
-        overall_task = progress.add_task("[cyan]Processing files...", total=len(sized))
-        byte_task = progress.add_task("[green]Data processed...", total=total_bytes)
+        overall_task = progress.add_task("[accent]Files[/accent]", total=len(sized))
+        byte_task = progress.add_task("[info]Data [/info]", total=total_bytes)
 
         for file_path, original_size in sized:
             safe_name = escape(file_path.name)
@@ -307,7 +368,7 @@ def compress_batch(
                 if sdcard_path:
                     progress.update(
                         overall_task,
-                        description=f"[magenta]Syncing {safe_name} to SD...[/magenta]",
+                        description=f"[warn]Syncing[/warn] {safe_name} → SD",
                     )
                     sd_equivalent_original = sdcard_path / rel_path
                     # Mirror the local zip filename (may be disambiguated).
@@ -337,69 +398,78 @@ def compress_batch(
                 metrics.errors.append({'file': str(file_path.name), 'error': str(e)})
 
             finally:
-                progress.update(
-                    overall_task, description=f"[cyan]Processed {safe_name}..."
-                )
+                progress.update(overall_task, description="[accent]Files[/accent]")
                 progress.advance(overall_task)
                 progress.advance(byte_task, advance=original_size)
 
 
 def generate_reports(metrics: SessionMetrics, dest_dir: str | Path) -> None:
-    dry_run_label = " (DRY RUN — sizes are estimates)" if metrics.dry_run else ""
-
-    # Affected Folders
-    folders_table = Table(
-        title="Affected Folders (Where uncompressed files were moved)", show_lines=True
-    )
-    folders_table.add_column("Folder Path", style="cyan")
-    for f in sorted(metrics.affected_folders):
-        folders_table.add_row(f)
-
-    # Summary
-    summary_table = Table(title=f"Session Summary{dry_run_label}", show_lines=True)
-    summary_table.add_column("Metric", style="bold green")
-    summary_table.add_column("Value", style="bold yellow")
     saved_bytes = metrics.original_size_bytes - metrics.zip_size_bytes
-    summary_table.add_row("Total Files Processed", str(metrics.total_files))
-    summary_table.add_row("Successful", str(metrics.success_count))
-    summary_table.add_row("Failed", str(metrics.error_count))
-    summary_table.add_row("Original Size", format_size(metrics.original_size_bytes))
-    summary_table.add_row("Compressed Size", format_size(metrics.zip_size_bytes))
-    summary_table.add_row("Total Space Saved", format_size(saved_bytes))
-    if metrics.sd_files_synced > 0:
-        summary_table.add_row("SD Card Files Synced", str(metrics.sd_files_synced))
-        summary_table.add_row("SD Card Data Written", format_size(metrics.sd_bytes_copied))
-    summary_table.add_row("Files Skipped", str(len(metrics.skipped_files)))
+    ratio = (saved_bytes / metrics.original_size_bytes * 100) if metrics.original_size_bytes else 0.0
 
-    # Skipped Files (console cap)
-    skip_table = None
+    # Summary metrics laid out as a clean two-column grid (no heavy gridlines).
+    summary_table = Table.grid(padding=(0, 3))
+    summary_table.add_column(justify="right", style="muted")
+    summary_table.add_column(justify="left", style="value")
+    summary_table.add_row("Files processed", str(metrics.total_files))
+    summary_table.add_row("Successful", f"[success]{metrics.success_count}[/success]")
+    fail_style = "danger" if metrics.error_count else "muted"
+    summary_table.add_row("Failed", f"[{fail_style}]{metrics.error_count}[/{fail_style}]")
+    summary_table.add_row("Skipped", str(len(metrics.skipped_files)))
+    summary_table.add_row("", "")
+    summary_table.add_row("Original size", format_size(metrics.original_size_bytes))
+    summary_table.add_row("Compressed size", format_size(metrics.zip_size_bytes))
+    if metrics.sd_files_synced > 0:
+        summary_table.add_row("", "")
+        summary_table.add_row("SD files synced", str(metrics.sd_files_synced))
+        summary_table.add_row("SD data written", format_size(metrics.sd_bytes_copied))
+
+    # Headline: space saved + ratio, front and centre.
+    headline = Text(justify="center")
+    headline.append(f"{format_size(saved_bytes)} saved", style="success")
+    headline.append(f"   ({ratio:.0f}% smaller)", style="muted")
+
+    title = "Session Summary" + (" — DRY RUN (estimates)" if metrics.dry_run else "")
+    console.print()
+    console.print(Panel(
+        Group(Align.center(headline), Text(), Align.center(summary_table)),
+        title=f"[accent]{title}[/accent]",
+        box=box.ROUNDED,
+        border_style="success" if metrics.error_count == 0 else "warn",
+        padding=(1, 2),
+    ))
+
+    # Affected folders
+    if metrics.affected_folders:
+        folders_table = Table(
+            title="Folders updated",
+            box=box.SIMPLE_HEAD, title_style="accent", show_lines=False,
+        )
+        folders_table.add_column("Originals moved here", style="path")
+        for f in sorted(metrics.affected_folders):
+            folders_table.add_row(f)
+        console.print(folders_table)
+
+    # Skipped (console cap)
     if metrics.skipped_files:
-        skip_table = Table(title="Skipped Files", show_lines=True)
-        skip_table.add_column("File", style="yellow")
-        skip_table.add_column("Reason", style="yellow")
+        skip_table = Table(title="Skipped files", box=box.SIMPLE_HEAD, title_style="warn")
+        skip_table.add_column("File", style="warn")
+        skip_table.add_column("Reason", style="muted")
         for skip in metrics.skipped_files[:CONSOLE_TABLE_ROW_CAP]:
             skip_table.add_row(skip['file'], skip['reason'])
         if len(metrics.skipped_files) > CONSOLE_TABLE_ROW_CAP:
             skip_table.add_row("...", f"and {len(metrics.skipped_files) - CONSOLE_TABLE_ROW_CAP} more (see report file)")
+        console.print(skip_table)
 
     # Errors (console cap)
-    error_table = None
     if metrics.errors:
-        error_table = Table(title="Error Report", show_lines=True)
-        error_table.add_column("File", style="red")
-        error_table.add_column("Error Message", style="red")
+        error_table = Table(title="Errors", box=box.SIMPLE_HEAD, title_style="danger")
+        error_table.add_column("File", style="danger")
+        error_table.add_column("Message", style="muted")
         for err in metrics.errors[:CONSOLE_TABLE_ROW_CAP]:
             error_table.add_row(err['file'], err['error'])
         if len(metrics.errors) > CONSOLE_TABLE_ROW_CAP:
             error_table.add_row("...", f"and {len(metrics.errors) - CONSOLE_TABLE_ROW_CAP} more (see report file)")
-
-    console.print()
-    if metrics.affected_folders:
-        console.print(folders_table)
-    console.print(summary_table)
-    if skip_table:
-        console.print(skip_table)
-    if error_table:
         console.print(error_table)
 
     # Write plain-text log
@@ -445,19 +515,28 @@ def _finalise_session(
 ) -> None:
     """Render reports and settle the resume state: clear it on a clean finish, keep
     it (so failures can be retried with --resume) when any file errored."""
-    console.print("\n[bold green]Finished processing.[/bold green]")
     generate_reports(metrics, dest_path)
     if dry_run:
+        console.print(Panel(
+            "[info]Dry run complete[/info] — nothing was changed.",
+            box=box.ROUNDED, border_style="info", padding=(0, 2),
+        ))
         return
     if metrics.error_count == 0:
         clear_state(dest_path)
+        console.print(Panel(
+            "[success]✔  All done.[/success] Your ROMs are compressed and originals are safely backed up.",
+            box=box.ROUNDED, border_style="success", padding=(0, 2),
+        ))
     else:
         state_file, _ = _state_paths(dest_path)
+        keep_note = ""
         if state_file.exists():
-            console.print(
-                f"[bold yellow]{metrics.error_count} file(s) failed. Progress has been saved — "
-                f"re-run with --resume to retry only the ones that did not finish.[/bold yellow]"
-            )
+            keep_note = "\nProgress has been saved — re-run with [info]--resume[/info] to retry only the ones that did not finish."
+        console.print(Panel(
+            f"[warn]Finished with {metrics.error_count} failure(s).[/warn]{keep_note}",
+            box=box.ROUNDED, border_style="warn", padding=(0, 2),
+        ))
 
 
 def _build_worklist_interactive(
@@ -489,19 +568,21 @@ def _build_worklist_interactive(
 
     selected: list[Path] = []
     for ext, files in sorted(grouped_files.items()):
+        folders = sorted(set(f.parent for f in files))
         console.print()
-        console.print(f"[bold magenta]--- Extension: {ext} ---[/bold magenta]")
-        folders = set(f.parent for f in files)
-        console.print(f"Found [bold]{len(files)}[/bold] files in [bold]{len(folders)}[/bold] folders.")
-        for folder in list(folders)[:SCAN_FOLDER_SAMPLE]:
-            console.print(f"  - {folder}")
+        console.print(
+            f"[brand]{ext}[/brand]  [muted]·[/muted]  "
+            f"[value]{len(files)}[/value] files in [value]{len(folders)}[/value] folders"
+        )
+        for folder in folders[:SCAN_FOLDER_SAMPLE]:
+            console.print(f"  [muted]•[/muted] [path]{folder}[/path]")
         if len(folders) > SCAN_FOLDER_SAMPLE:
-            console.print(f"  - ... and {len(folders) - SCAN_FOLDER_SAMPLE} more")
+            console.print(f"  [muted]• … and {len(folders) - SCAN_FOLDER_SAMPLE} more[/muted]")
 
-        if Confirm.ask(f"Do you want to compress and move these [bold]{ext}[/bold] files?"):
+        if Confirm.ask(f"  Compress and move these [brand]{ext}[/brand] files?"):
             selected.extend(files)
         else:
-            console.print(f"[yellow]Skipping {ext} files.[/yellow]")
+            console.print(f"  [warn]Skipping {ext}[/warn]")
             for f in files:
                 metrics.skipped_files.append({'file': str(f.name), 'reason': f"Extension {ext} skipped by user"})
     return selected
@@ -533,12 +614,7 @@ def compress_roms(
         )
         sys.exit(1)
 
-    console.print(Panel(
-        "[bold yellow]WARNING:[/bold yellow] This script should ONLY be used for cartridge-based systems.\n"
-        "DO NOT use this for CD-based games (PS1, Saturn, Sega CD).\n"
-        "Use CHD format for disc-based games instead.",
-        title="ROM Stuffer",
-    ))
+    print_warning_banner()
 
     dest_path.mkdir(parents=True, exist_ok=True)
     metrics = SessionMetrics()
@@ -550,8 +626,8 @@ def compress_roms(
 
     if dry_run:
         console.print(Panel(
-            "[bold cyan]DRY RUN MODE ENABLED:[/bold cyan] No files will be modified.",
-            title="Dry Run",
+            "[info]DRY RUN[/info] — no files will be modified; report sizes are estimates.",
+            box=box.ROUNDED, border_style="info", padding=(0, 2),
         ))
 
     # Validate and normalise --type
@@ -750,23 +826,37 @@ if __name__ == "__main__":
     ]
     interactive_mode = not any(provided_args)
 
+    print_header()
+
     source = args.source
     if not source:
-        source = Prompt.ask("Enter the source directory to scan for ROMs").strip()
+        source = Prompt.ask("[accent]Source[/accent] directory to scan for ROMs").strip()
 
     dest = args.dest
     if not dest:
-        dest = Prompt.ask("Enter the destination directory to move original files to").strip()
+        dest = Prompt.ask("[accent]Destination[/accent] directory for the original files").strip()
 
     dry_run = args.dry_run
     if interactive_mode and not dry_run:
-        dry_run = Confirm.ask("Do you want to run in DRY-RUN mode (preview only)?", default=False)
+        dry_run = Confirm.ask("Run in [info]dry-run[/info] mode (preview only)?", default=False)
 
     recursive = not args.no_recursive
     if interactive_mode and not args.no_recursive:
-        recursive = Confirm.ask("Do you want to scan sub-folders recursively?", default=True)
+        recursive = Confirm.ask("Scan sub-folders [accent]recursively[/accent]?", default=True)
+
+    level = args.level
+    if interactive_mode:
+        while True:
+            level = IntPrompt.ask(
+                "[accent]Compression level[/accent] "
+                "[muted](1 = fastest, 9 = smallest; 6 recommended)[/muted]",
+                default=6,
+            )
+            if 1 <= level <= 9:
+                break
+            console.print("  [warn]Please choose a number from 1 to 9.[/warn]")
 
     compress_roms(
-        source, args.type, dest, args.sdcard, dry_run, recursive, args.level,
+        source, args.type, dest, args.sdcard, dry_run, recursive, level,
         resume=args.resume, fresh=args.fresh,
     )

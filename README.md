@@ -152,9 +152,16 @@ python compress_roms.py \
 
 ## Usage
 
-By default, `rom_stuffer` runs in **Interactive Mode**. It scans the source directory for all recognised cartridge ROM extensions, groups them by type, and asks you whether to compress each.
+By default, `rom_stuffer` runs in **Interactive Mode** (a styled terminal UI). Launch it with no arguments and it walks you through every option — no flags to remember:
 
 ```bash
+python compress_roms.py
+```
+
+It prompts for: **source** and **destination** directories, **dry-run** (preview) mode, **recursive** scanning, **compression level** (1–9, default 6), and **SD card** sync. It then scans, groups the ROMs it finds by extension, and asks whether to compress each type. If a previous run was interrupted, it also offers to [resume](#resuming-an-interrupted-job). Any option you prefer to set up front can be passed as a flag instead (see the table below); anything you don't pass is asked interactively.
+
+```bash
+# Or pass what you know and be prompted for the rest
 python compress_roms.py --source "<source_directory>" --dest "<backup_directory>"
 ```
 
