@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import zipfile
@@ -30,6 +31,12 @@ FAST_COPY_BUFFER_BYTES: int = 4 * 1024 * 1024   # 4 MB: suits typical SD/flash p
 SCAN_FOLDER_SAMPLE: int = 5
 CONSOLE_TABLE_ROW_CAP: int = 20
 DRY_RUN_COMPRESSION_ESTIMATE: float = 0.4        # rough DEFLATE ratio on ROM data
+
+# Resume/checkpoint state (written into the destination directory)
+STATE_VERSION: int = 1
+STATE_FILENAME: str = ".rom_stuffer_state.json"
+JOURNAL_FILENAME: str = ".rom_stuffer_journal.log"
+JOURNAL_FSYNC_INTERVAL: int = 200                # fsync the journal every N completions
 
 SUPPORTED_EXTENSIONS: set = {
     # Nintendo
@@ -120,6 +127,109 @@ def build_zip_path(file_path: Path, claimed: set[Path]) -> Path:
     return candidate
 
 
+# --------------------------------------------------------------------------- #
+# Resume / checkpoint support
+#
+# A long run over tens of thousands of files must survive an interruption without
+# rescanning the whole tree. Two files in the destination make that possible:
+#   * a manifest (JSON) written once, holding the full work-list as paths relative
+#     to the source; and
+#   * an append-only journal, one relative path per completed file.
+# On resume, pending = manifest − journal, so no rescan and no re-prompting.
+# --------------------------------------------------------------------------- #
+
+def _state_paths(dest_path: Path) -> tuple[Path, Path]:
+    return dest_path / STATE_FILENAME, dest_path / JOURNAL_FILENAME
+
+
+def load_manifest(dest_path: Path) -> dict | None:
+    """Return the saved manifest, or None if absent, unreadable, or incompatible."""
+    state_file, _ = _state_paths(dest_path)
+    if not state_file.exists():
+        return None
+    try:
+        with open(state_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get('version') != STATE_VERSION or 'pending' not in data:
+        return None
+    return data
+
+
+def read_journal(dest_path: Path) -> set[str]:
+    """Return the set of relative paths already recorded as completed."""
+    _, journal_file = _state_paths(dest_path)
+    done: set[str] = set()
+    if not journal_file.exists():
+        return done
+    try:
+        with open(journal_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                rel = line.rstrip('\n')
+                if rel:
+                    done.add(rel)
+    except OSError:
+        pass
+    return done
+
+
+def write_manifest(dest_path: Path, source_path: Path, pending_rel: list[str]) -> None:
+    """Atomically write the work-list manifest and reset the journal."""
+    state_file, journal_file = _state_paths(dest_path)
+    data = {
+        'version': STATE_VERSION,
+        'source': str(source_path),
+        'total': len(pending_rel),
+        'pending': pending_rel,
+    }
+    tmp = state_file.with_name(state_file.name + '.tmp')
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(data, f)
+        f.flush()
+        os.fsync(f.fileno())
+    tmp.replace(state_file)
+    journal_file.unlink(missing_ok=True)
+
+
+def clear_state(dest_path: Path) -> None:
+    """Remove the manifest and journal (called on clean completion or --fresh)."""
+    state_file, journal_file = _state_paths(dest_path)
+    state_file.unlink(missing_ok=True)
+    journal_file.unlink(missing_ok=True)
+
+
+class ResumeState:
+    """Append-only progress journal. mark_done() is O(1) and flushed per file so a
+    process crash loses nothing; fsync runs every JOURNAL_FSYNC_INTERVAL files to
+    bound the cost while still guarding against power loss."""
+
+    def __init__(self, dest_path: Path, done: set[str]) -> None:
+        _, journal_file = _state_paths(dest_path)
+        self.done = done
+        self._fh = open(journal_file, 'a', encoding='utf-8')
+        self._since_sync = 0
+
+    def is_done(self, rel: str) -> bool:
+        return rel in self.done
+
+    def mark_done(self, rel: str) -> None:
+        self._fh.write(rel + '\n')
+        self._fh.flush()
+        self.done.add(rel)
+        self._since_sync += 1
+        if self._since_sync >= JOURNAL_FSYNC_INTERVAL:
+            os.fsync(self._fh.fileno())
+            self._since_sync = 0
+
+    def close(self) -> None:
+        try:
+            os.fsync(self._fh.fileno())
+        except OSError:
+            pass
+        self._fh.close()
+
+
 def compress_batch(
     files_to_process: list[Path],
     source_path: Path,
@@ -128,6 +238,7 @@ def compress_batch(
     sdcard_path: Path | None = None,
     compress_level: int = 6,
     claimed_zips: set[Path] | None = None,
+    resume_state: ResumeState | None = None,
 ) -> None:
     dry_run = metrics.dry_run
 
@@ -216,6 +327,10 @@ def compress_batch(
                 metrics.success_count += 1
                 metrics.total_files += 1
                 metrics.affected_folders.add(str(original_dest.parent))
+
+                # Record durable progress so an interruption can resume here.
+                if resume_state is not None:
+                    resume_state.mark_done(str(rel_path))
 
             except Exception as e:
                 metrics.error_count += 1
@@ -325,6 +440,73 @@ def generate_reports(metrics: SessionMetrics, dest_dir: str | Path) -> None:
         console.print(f"[bold red]Failed to write log file: {e}[/bold red]")
 
 
+def _finalise_session(
+    metrics: SessionMetrics, dest_path: Path, dry_run: bool
+) -> None:
+    """Render reports and settle the resume state: clear it on a clean finish, keep
+    it (so failures can be retried with --resume) when any file errored."""
+    console.print("\n[bold green]Finished processing.[/bold green]")
+    generate_reports(metrics, dest_path)
+    if dry_run:
+        return
+    if metrics.error_count == 0:
+        clear_state(dest_path)
+    else:
+        state_file, _ = _state_paths(dest_path)
+        if state_file.exists():
+            console.print(
+                f"[bold yellow]{metrics.error_count} file(s) failed. Progress has been saved — "
+                f"re-run with --resume to retry only the ones that did not finish.[/bold yellow]"
+            )
+
+
+def _build_worklist_interactive(
+    source_path: Path, recursive: bool, metrics: SessionMetrics
+) -> list[Path]:
+    """Scan, group by extension, prompt per extension, and gather all confirmed files
+    into a single list. Prompting up front (rather than per-batch) is what lets the
+    whole job be captured in one resumable manifest."""
+    console.print(
+        f"Scanning for supported cartridge ROMs in [cyan]'{source_path}'[/cyan] "
+        f"(Recursive: {recursive})..."
+    )
+    grouped_files: dict[str, list[Path]] = defaultdict(list)
+    scan_iter = source_path.rglob('*') if recursive else source_path.glob('*')
+    for p in scan_iter:
+        try:
+            if p.is_file():
+                ext = p.suffix.lower()
+                if ext in SUPPORTED_EXTENSIONS:
+                    grouped_files[ext].append(p)
+                else:
+                    metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unsupported extension: {p.suffix}"})
+        except OSError as e:
+            metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
+
+    if not grouped_files:
+        console.print("[yellow]No supported ROM files found.[/yellow]")
+        return []
+
+    selected: list[Path] = []
+    for ext, files in sorted(grouped_files.items()):
+        console.print()
+        console.print(f"[bold magenta]--- Extension: {ext} ---[/bold magenta]")
+        folders = set(f.parent for f in files)
+        console.print(f"Found [bold]{len(files)}[/bold] files in [bold]{len(folders)}[/bold] folders.")
+        for folder in list(folders)[:SCAN_FOLDER_SAMPLE]:
+            console.print(f"  - {folder}")
+        if len(folders) > SCAN_FOLDER_SAMPLE:
+            console.print(f"  - ... and {len(folders) - SCAN_FOLDER_SAMPLE} more")
+
+        if Confirm.ask(f"Do you want to compress and move these [bold]{ext}[/bold] files?"):
+            selected.extend(files)
+        else:
+            console.print(f"[yellow]Skipping {ext} files.[/yellow]")
+            for f in files:
+                metrics.skipped_files.append({'file': str(f.name), 'reason': f"Extension {ext} skipped by user"})
+    return selected
+
+
 def compress_roms(
     source_dir: str,
     file_type: str | None,
@@ -333,6 +515,8 @@ def compress_roms(
     dry_run: bool = False,
     recursive: bool = True,
     compress_level: int = 6,
+    resume: bool = False,
+    fresh: bool = False,
 ) -> None:
     source_path = Path(source_dir).resolve()
     dest_path = Path(dest_dir).resolve()
@@ -391,7 +575,7 @@ def compress_roms(
             console.print(f"[bold red]Error: SD Card directory '{sdcard_path}' does not exist.[/bold red]")
             sys.exit(1)
         console.print(f"[bold green]SD Card Sync Enabled:[/bold green] Pointing to {sdcard_path}\n")
-    elif not file_type:
+    elif not file_type and not resume:
         if Confirm.ask("\nDo you want to sync the compressed ROMs directly to an SD Card after compressing?"):
             sd_input = Prompt.ask("Enter the path to the SD Card (e.g. F:\\ or /Volumes/SDCARD)").strip()
             if sd_input:
@@ -401,13 +585,80 @@ def compress_roms(
                     sys.exit(1)
                 console.print(f"[bold green]SD Card Sync Enabled:[/bold green] Pointing to {sdcard_path}\n")
 
-    # Headless / --type mode
-    if file_type:
+    # ----------------------------------------------------------------------- #
+    # Resume detection. Dry-run never touches persisted state.
+    # ----------------------------------------------------------------------- #
+    manifest = None if dry_run else load_manifest(dest_path)
+    do_resume = False
+    if manifest is not None:
+        if fresh:
+            clear_state(dest_path)
+            manifest = None
+            console.print("[yellow]--fresh: discarded saved progress; starting a new scan.[/yellow]")
+        elif manifest.get('source') != str(source_path):
+            console.print(
+                "[bold red]A saved job exists in this destination for a DIFFERENT source:[/bold red]\n"
+                f"  saved source:   {manifest.get('source')}\n"
+                f"  current source: {source_path}\n"
+                "Refusing to mix jobs. Re-run with --fresh to discard it, or use a different --dest."
+            )
+            sys.exit(1)
+        else:
+            done = read_journal(dest_path)
+            remaining = manifest['total'] - len(done)
+            if resume:
+                do_resume = True
+            else:
+                console.print(
+                    "\n[bold cyan]Found an incomplete job in this destination:[/bold cyan]\n"
+                    f"  source:   {manifest.get('source')}\n"
+                    f"  progress: {len(done):,} / {manifest['total']:,} done  ({remaining:,} remaining)"
+                )
+                if Confirm.ask("Resume where it left off (skip the full rescan)?", default=True):
+                    do_resume = True
+                else:
+                    clear_state(dest_path)
+                    manifest = None
+                    console.print("[yellow]Starting a new scan; previous progress discarded.[/yellow]")
+
+    # ----------------------------------------------------------------------- #
+    # Build the work-list: either from the saved manifest (resume) or a scan.
+    # ----------------------------------------------------------------------- #
+    files_to_process: list[Path] = []
+    if do_resume and manifest is not None:
+        done = read_journal(dest_path)
+        for rel in manifest['pending']:
+            if rel in done:
+                continue
+            candidate = source_path / rel
+            if candidate.exists():
+                files_to_process.append(candidate)
+            # Missing candidates were already handled (moved) or removed — skip quietly.
+        console.print(
+            f"[bold green]Resuming:[/bold green] {len(files_to_process):,} files remaining "
+            f"of {manifest['total']:,} (no rescan needed)."
+        )
+        if not files_to_process:
+            console.print("[green]Nothing left to do — the job is already complete.[/green]")
+            clear_state(dest_path)
+            return
+
+        # The file that was mid-flight when the run was interrupted may have left a
+        # committed .zip that was never moved or journalled. Seed claimed_zips with the
+        # zips owned by completed files, then delete any *other* stale zip sitting next
+        # to a pending file, so resume recreates it under its proper name instead of
+        # disambiguating around it (which would duplicate it on disk and on the SD card).
+        done_defaults = {(source_path / r).with_suffix('.zip') for r in done}
+        claimed_zips |= done_defaults
+        for f in files_to_process:
+            stale = f.with_suffix('.zip')
+            if stale not in done_defaults and stale.exists():
+                stale.unlink()
+    elif file_type:
         console.print(
             f"Scanning for [cyan]'{file_type}'[/cyan] files in "
             f"[cyan]'{source_path}'[/cyan] (Recursive: {recursive})..."
         )
-        files_to_process: list[Path] = []
         scan_iter = source_path.rglob('*') if recursive else source_path.glob('*')
         for p in scan_iter:
             try:
@@ -415,55 +666,39 @@ def compress_roms(
                     files_to_process.append(p)
             except OSError as e:
                 metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
-
         if not files_to_process:
             console.print("[yellow]No files found matching the specified type.[/yellow]")
             return
-
         console.print(f"Found [bold]{len(files_to_process)}[/bold] files to process.")
-        compress_batch(files_to_process, source_path, dest_path, metrics, sdcard_path, compress_level, claimed_zips)
-        generate_reports(metrics, dest_dir)
-        return
+    else:
+        files_to_process = _build_worklist_interactive(source_path, recursive, metrics)
+        if not files_to_process:
+            # Nothing selected — still emit a report so skips are recorded.
+            generate_reports(metrics, dest_path)
+            return
 
-    # Interactive mode
-    console.print(f"Scanning for supported cartridge ROMs in [cyan]'{source_path}'[/cyan] (Recursive: {recursive})...")
-    grouped_files: dict[str, list[Path]] = defaultdict(list)
-    scan_iter = source_path.rglob('*') if recursive else source_path.glob('*')
-    for p in scan_iter:
-        try:
-            if p.is_file():
-                ext = p.suffix.lower()
-                if ext in SUPPORTED_EXTENSIONS:
-                    grouped_files[ext].append(p)
-                else:
-                    metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unsupported extension: {p.suffix}"})
-        except OSError as e:
-            metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
-
-    if not grouped_files:
-        console.print("[yellow]No supported ROM files found.[/yellow]")
-        return
-
-    for ext, files in sorted(grouped_files.items()):
-        console.print()
-        console.print(f"[bold magenta]--- Extension: {ext} ---[/bold magenta]")
-        folders = set(f.parent for f in files)
-        console.print(f"Found [bold]{len(files)}[/bold] files in [bold]{len(folders)}[/bold] folders.")
-        sample_folders = list(folders)[:SCAN_FOLDER_SAMPLE]
-        for folder in sample_folders:
-            console.print(f"  - {folder}")
-        if len(folders) > SCAN_FOLDER_SAMPLE:
-            console.print(f"  - ... and {len(folders) - SCAN_FOLDER_SAMPLE} more")
-
-        if Confirm.ask(f"Do you want to compress and move these [bold]{ext}[/bold] files?"):
-            compress_batch(files, source_path, dest_path, metrics, sdcard_path, compress_level, claimed_zips)
+    # ----------------------------------------------------------------------- #
+    # Persist the manifest for a fresh run, then process with journalling.
+    # ----------------------------------------------------------------------- #
+    resume_state: ResumeState | None = None
+    if not dry_run:
+        if not do_resume:
+            pending_rel = [str(p.relative_to(source_path)) for p in files_to_process]
+            write_manifest(dest_path, source_path, pending_rel)
+            resume_state = ResumeState(dest_path, set())
         else:
-            console.print(f"[yellow]Skipping {ext} files.[/yellow]")
-            for f in files:
-                metrics.skipped_files.append({'file': str(f.name), 'reason': f"Extension {ext} skipped by user"})
+            resume_state = ResumeState(dest_path, read_journal(dest_path))
 
-    console.print("\n[bold green]Finished processing all batches![/bold green]")
-    generate_reports(metrics, dest_dir)
+    try:
+        compress_batch(
+            files_to_process, source_path, dest_path, metrics,
+            sdcard_path, compress_level, claimed_zips, resume_state,
+        )
+    finally:
+        if resume_state is not None:
+            resume_state.close()
+
+    _finalise_session(metrics, dest_path, dry_run)
 
 
 if __name__ == "__main__":
@@ -498,10 +733,21 @@ if __name__ == "__main__":
             "Default 6 (Normal) is the recommended balance for RetroArch handhelds."
         ),
     )
+    parser.add_argument(
+        "--resume", action="store_true",
+        help="Resume a previously interrupted job from its saved progress, skipping the full rescan.",
+    )
+    parser.add_argument(
+        "--fresh", action="store_true",
+        help="Discard any saved progress in the destination and start a brand-new scan.",
+    )
 
     args = parser.parse_args()
 
-    provided_args = [args.source, args.dest, args.type, args.sdcard, args.dry_run, args.no_recursive]
+    provided_args = [
+        args.source, args.dest, args.type, args.sdcard,
+        args.dry_run, args.no_recursive, args.resume, args.fresh,
+    ]
     interactive_mode = not any(provided_args)
 
     source = args.source
@@ -520,4 +766,7 @@ if __name__ == "__main__":
     if interactive_mode and not args.no_recursive:
         recursive = Confirm.ask("Do you want to scan sub-folders recursively?", default=True)
 
-    compress_roms(source, args.type, dest, args.sdcard, dry_run, recursive, args.level)
+    compress_roms(
+        source, args.type, dest, args.sdcard, dry_run, recursive, args.level,
+        resume=args.resume, fresh=args.fresh,
+    )

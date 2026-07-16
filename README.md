@@ -28,6 +28,7 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 4. **Organised Backups:** Moving your uncompressed files into a single dump folder is messy. `rom_stuffer` recreates your exact subdirectory structure in the backup folder automatically.
 5. **SD Card Fast-Sync:** Built-in sequential 4 MB-buffered bulk I/O allows you to reconcile newly compressed files directly to your SD card. It auto-deletes the old uncompressed files, writes the new zip, and fsyncs to confirm the data is durable.
 6. **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed report to the screen (via a Rich TUI) and to a text log file.
+7. **Resumable:** Checkpoints progress as it goes, so an interrupted run over tens of thousands of files picks up where it left off instead of rescanning your whole library. See [Resuming an interrupted job](#resuming-an-interrupted-job).
 
 ---
 
@@ -168,7 +169,56 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 | `--dry-run` | | **(Optional)** Preview what will happen without modifying any files. Space savings in the report are estimates. |
 | `--no-recursive` | | **(Optional)** Scan only the top-level source folder; do not descend into sub-folders. |
 | `--level` | `-l` | **(Optional)** DEFLATE compression level 1–9. Default: `6` (Normal). Level 6 is the recommended balance for RetroArch handhelds — do not go higher without testing on your device. |
+| `--resume` | | **(Optional)** Resume a previously interrupted job from its saved progress, skipping the full rescan. See [Resuming an interrupted job](#resuming-an-interrupted-job). |
+| `--fresh` | | **(Optional)** Discard any saved progress in the destination and start a brand-new scan. |
 | `--help` | `-h` | Show the help menu and exit. |
+
+---
+
+## Resuming an interrupted job
+
+For large collections (tens of thousands of files), a run can be interrupted — a full SD card, an unplugged drive, a `Ctrl-C`, or a crash. **rom_stuffer checkpoints its progress so it can pick up where it left off without rescanning your entire library.**
+
+### How it works
+
+As soon as processing begins, the tool writes two small hidden files into your **destination** (backup) folder:
+
+- `.rom_stuffer_state.json` — the full list of files this job will process.
+- `.rom_stuffer_journal.log` — an append-only record of every file completed so far (flushed after each file, so an interruption loses nothing).
+
+If a run is interrupted, these files remain. The next run detects them.
+
+### Resuming (interactive)
+
+Just run the same command again. The tool notices the incomplete job and asks:
+
+```
+Found an incomplete job in this destination:
+  source:   /Volumes/ROMS
+  progress: 22,431 / 40,002 done  (17,571 remaining)
+Resume where it left off (skip the full rescan)? [y/n] (y):
+```
+
+Answer **y** and it processes only the remaining files — no rescan, no re-prompting for which extensions to compress.
+
+### Resuming (headless / scripted)
+
+Pass `--resume` to skip the prompt, or `--fresh` to ignore the saved progress and start over:
+
+```bash
+# Continue the interrupted job
+python compress_roms.py -s "/Volumes/ROMS" -d "/backup" -sd "/Volumes/SDCARD" --resume
+
+# Or throw away the saved progress and rescan from scratch
+python compress_roms.py -s "/Volumes/ROMS" -d "/backup" --fresh
+```
+
+### Good to know
+
+- **Files that failed are retried, not skipped.** If some files errored (e.g. a momentary card disconnect), the saved progress is kept and the summary tells you to re-run with `--resume` to retry just those. Successful files are never reprocessed.
+- **On a clean finish the state files are removed automatically** — no manual cleanup.
+- **The saved job is tied to its source.** If you point a *different* source at a destination that already has a saved job, the tool refuses (to avoid mixing two jobs) and tells you to use `--fresh` or a different destination.
+- **Dry runs never write state**, since they change nothing.
 
 ---
 
