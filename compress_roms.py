@@ -40,22 +40,22 @@ except ImportError:
 # triangles; the empty middle is an inverted triangle tapering to a point at the
 # base, so it reads as one Triforce. (Theme name only — the app is ROM STUFFER.)
 ZELDA_ART = (
-    "[brand]     ██     [/brand]\n"
-    "[brand]    ████    [/brand]\n"
-    "[brand]   ██████   [/brand]\n"
-    "[brand]  ██    ██  [/brand]\n"
-    "[brand] ████  ████ [/brand]\n"
+    "[brand]██[/brand]\n"
+    "[brand]████[/brand]\n"
+    "[brand]██████[/brand]\n"
+    "[brand]██    ██[/brand]\n"
+    "[brand]████  ████[/brand]\n"
     "[brand]████████████[/brand]"
 )
 
 # "metroid" theme emblem — bio-cyan membrane dome, three red nuclei, orange mandibles.
 METROID_ART = (
-    "[accent]     ▁▄▄▄▄▄▁     [/accent]\n"
-    "[accent]   ◢█████████◣   [/accent]\n"
-    "[accent]  ██[/accent] [danger]◉[/danger] [danger]◉[/danger] [danger]◉[/danger] [accent]██  [/accent]\n"
-    "[accent]  ◥█████████◤  [/accent]\n"
-    "[brand]   ▜█▙ ▜█▙ ▜█▙   [/brand]\n"
-    "[brand]    ▚   ▚   ▚    [/brand]"
+    "[accent]▁▄▄▄▄▄▁[/accent]\n"
+    "[accent]◢█████████◣[/accent]\n"
+    "[accent]██[/accent] [danger]◉[/danger] [danger]◉[/danger] [danger]◉[/danger] [accent]██[/accent]\n"
+    "[accent]◥█████████◤[/accent]\n"
+    "[brand]▜█▙ ▜█▙ ▜█▙[/brand]\n"
+    "[brand]▚   ▚   ▚[/brand]"
 )
 
 THEMES: dict[str, dict] = {
@@ -116,7 +116,7 @@ apply_theme(DEFAULT_THEME)
 
 # Named constants
 FAST_COPY_BUFFER_BYTES: int = 4 * 1024 * 1024   # 4 MB: suits typical SD/flash page sizes
-SCAN_FOLDER_SAMPLE: int = 5
+SCAN_FOLDER_SAMPLE: int = 8
 CONSOLE_TABLE_ROW_CAP: int = 20
 DRY_RUN_COMPRESSION_ESTIMATE: float = 0.4        # rough DEFLATE ratio on ROM data
 
@@ -158,6 +158,9 @@ SUPPORTED_EXTENSIONS: set = {
 def print_header() -> None:
     """Render the themed banner: emblem + the app name (ROM STUFFER) + theme caption."""
     theme = THEMES[_active_theme["name"]]
+    # Each emblem row holds only symmetric content (no leading/trailing padding), so
+    # centring every row lands them on one axis. (Rich strips edge whitespace when it
+    # justifies, so padding-based positioning would shear the shape.)
     art = Text.from_markup(theme["art"], justify="center")
     title = Text("R O M   S T U F F E R", style="brand", justify="center")
     caption = Text(f"‹ {theme['label']} ›", style="muted", justify="center")
@@ -728,10 +731,24 @@ def _build_worklist_interactive(
         )
         for folder in folders[:SCAN_FOLDER_SAMPLE]:
             console.print(f"  [muted]•[/muted] [path]{folder}[/path]")
-        if len(folders) > SCAN_FOLDER_SAMPLE:
-            console.print(f"  [muted]• … and {len(folders) - SCAN_FOLDER_SAMPLE} more[/muted]")
+        truncated = len(folders) - SCAN_FOLDER_SAMPLE
+        if truncated > 0:
+            console.print(f"  [muted]• … and {truncated} more (type 'a' to list them all)[/muted]")
 
-        if Confirm.ask(f"  Compress and move these [brand]{ext}[/brand] files?"):
+        # Prompt with an optional 'a' to print every folder, then re-ask.
+        while True:
+            choices = ["y", "n", "a"] if truncated > 0 else ["y", "n"]
+            answer = Prompt.ask(
+                f"  Compress and move these [brand]{ext}[/brand] files?",
+                choices=choices, default="y", show_choices=False,
+            )
+            if answer == "a":
+                for folder in folders:
+                    console.print(f"  [muted]•[/muted] [path]{folder}[/path]")
+                continue
+            break
+
+        if answer == "y":
             selected.extend(files)
         else:
             console.print(f"  [warn]Skipping {ext}[/warn]")
