@@ -1,10 +1,25 @@
-# rom_stuffer
+<div align="center">
+
+<img src="assets/banner.png" alt="ROM STUFFER — cartridge ROM compressor for RetroArch handhelds" width="100%">
+
+<br>
+
+![Python](https://img.shields.io/badge/python-3.8%2B-f8c000?style=for-the-badge&labelColor=100e08)
+![Platform](https://img.shields.io/badge/platform-win%20%7C%20mac%20%7C%20linux-38c020?style=for-the-badge&labelColor=100e08)
+![Cartridge only](https://img.shields.io/badge/cartridge%20ROMs-only-d82800?style=for-the-badge&labelColor=100e08)
+![Resumable](https://img.shields.io/badge/resumable-yes-f8c000?style=for-the-badge&labelColor=100e08)
+
+**▲  Compress retro cartridge ROMs into RetroArch-ready `.zip` archives — with an 8-bit terminal UI.  ▲**
+
+</div>
+
+---
+
+`rom_stuffer` is a command-line Python utility that streamlines managing retro gaming ROMs. It recursively scans a directory for cartridge ROM files, compresses each game into its own highly-compatible `.zip` archive, and safely moves the original uncompressed files to a backup location while perfectly preserving your folder structure.
+
+It is built for preparing SD cards for retro handheld consoles (R36S, R36XX, Ayn Thor, Miyoo Mini, etc.) running RetroArch-based systems (ArkOS, AmberELEC, OnionOS).
 
 **Repository:** [https://github.com/Tasogarre/rom-stuffer](https://github.com/Tasogarre/rom-stuffer)
-
-`rom_stuffer` is a command-line Python utility designed to streamline the management of retro gaming ROMs. It recursively scans a directory for specific ROM files, compresses each game into its own highly-compatible `.zip` archive, and safely moves the original uncompressed files to a backup location while perfectly preserving your folder structure.
-
-This tool is specifically optimised for users preparing SD cards for retro handheld consoles (like the R36S, R36XX, Ayn Thor, Miyoo Mini, etc.) running RetroArch-based operating systems (ArkOS, AmberELEC, OnionOS).
 
 ---
 
@@ -29,6 +44,18 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 5. **SD Card Fast-Sync:** Built-in sequential 4 MB-buffered bulk I/O allows you to reconcile newly compressed files directly to your SD card. It auto-deletes the old uncompressed files, writes the new zip, and fsyncs to confirm the data is durable.
 6. **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed report to the screen (via a Rich TUI) and to a text log file.
 7. **Resumable:** Checkpoints progress as it goes, so an interrupted run over tens of thousands of files picks up where it left off instead of rescanning your whole library. See [Resuming an interrupted job](#resuming-an-interrupted-job).
+
+---
+
+## ▲ Preview
+
+<div align="center">
+
+<img src="assets/screenshot-zelda.png" alt="ROM Stuffer running in the Legend of Zelda theme" width="80%">
+
+<sub>The interactive UI in the **Zelda** theme — pick **Metroid** any time with `--theme metroid`. See [Themes](#themes).</sub>
+
+</div>
 
 ---
 
@@ -192,10 +219,28 @@ python compress_roms.py --theme zelda      # gold Triforce, Link-green (default)
 python compress_roms.py --theme metroid    # Samus orange, bio-cyan Metroid
 ```
 
-- **`zelda`** — *The Legend of Zelda.* Gold Triforce emblem, Link-green highlights, a "It's dangerous to go alone!" welcome.
-- **`metroid`** — *Metroid.* A cyan Metroid creature with red nuclei, Samus-armour orange, and a Samus-visor-yellow caution panel.
-
 Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours.
+
+<table>
+<tr>
+<td width="50%" align="center">
+
+**`zelda`** *(default)*<br>
+<sub>Gold Triforce · Link-green · "It's dangerous to go alone!"</sub>
+
+<img src="assets/screenshot-zelda.png" alt="Zelda theme" width="100%">
+
+</td>
+<td width="50%" align="center">
+
+**`metroid`**<br>
+<sub>Samus orange · bio-cyan Metroid with red nuclei · visor-yellow</sub>
+
+<img src="assets/screenshot-metroid.png" alt="Metroid theme" width="100%">
+
+</td>
+</tr>
+</table>
 
 ---
 
