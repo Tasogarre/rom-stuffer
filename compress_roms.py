@@ -36,18 +36,19 @@ except ImportError:
 # so switching the theme re-skins the entire interface.
 # --------------------------------------------------------------------------- #
 
-# The Legend of Zelda — gold Triforce (three triangles, clean centre gap), on black.
+# "zelda" theme emblem — a gold Triforce (half-block pixel art). Three solid
+# triangles; the empty middle is an inverted triangle tapering to a point at the
+# base, so it reads as one Triforce. (Theme name only — the app is ROM STUFFER.)
 ZELDA_ART = (
-    "[brand]     ◢◣     [/brand]\n"
-    "[brand]    ◢██◣    [/brand]\n"
-    "[brand]   ◢████◣   [/brand]\n"
-    "[brand]  ◢◣    ◢◣  [/brand]\n"
-    "[brand] ◢██◣  ◢██◣ [/brand]\n"
-    "[brand]◢████◣◢████◣[/brand]"
+    "[brand]     ██     [/brand]\n"
+    "[brand]    ████    [/brand]\n"
+    "[brand]   ██████   [/brand]\n"
+    "[brand]  ██    ██  [/brand]\n"
+    "[brand] ████  ████ [/brand]\n"
+    "[brand]████████████[/brand]"
 )
-ZELDA_TITLE = "[brand]T H E   L E G E N D   O F   Z E L D A[/brand]"
 
-# Metroid — bio-cyan membrane dome, three red nuclei, orange mandibles below.
+# "metroid" theme emblem — bio-cyan membrane dome, three red nuclei, orange mandibles.
 METROID_ART = (
     "[accent]     ▁▄▄▄▄▄▁     [/accent]\n"
     "[accent]   ◢█████████◣   [/accent]\n"
@@ -56,40 +57,39 @@ METROID_ART = (
     "[brand]   ▜█▙ ▜█▙ ▜█▙   [/brand]\n"
     "[brand]    ▚   ▚   ▚    [/brand]"
 )
-METROID_TITLE = "[brand]▗▄ M E T R O I D ▄▖[/brand]"
 
 THEMES: dict[str, dict] = {
     "zelda": {
         "styles": {
-            "brand": "bold #f8c000",     # Triforce gold
-            "accent": "#38c020",         # Link green
+            "brand": "bold #f8c000",     # gold
+            "accent": "#38c020",         # green
             "info": "#80d010",           # bright leaf green
             "success": "bold #38c020",
             "warn": "#f8c000",           # gold caution
-            "danger": "bold #d82800",    # Ganon red
+            "danger": "bold #d82800",    # red
             "muted": "dim #b08040",      # aged parchment
             "value": "bold #f8c000",
             "path": "#80d010",
         },
         "art": ZELDA_ART,
-        "title": ZELDA_TITLE,
+        "label": "zelda theme",
         "tagline": "It's dangerous to go alone!  Compress your cartridges first.",
         "border": "#f8c000",
     },
     "metroid": {
         "styles": {
-            "brand": "bold #f85000",     # Samus armour orange
+            "brand": "bold #f85000",     # armour orange
             "accent": "#38c0f8",         # bio-cyan
-            "info": "#40e0a0",           # Metroid membrane green
+            "info": "#40e0a0",           # membrane green
             "success": "bold #40e0a0",
-            "warn": "#f8d000",           # Samus visor yellow
+            "warn": "#f8d000",           # visor yellow
             "danger": "bold #f8005c",    # nuclei magenta-red
             "muted": "dim #7088a0",      # cavern steel
             "value": "bold #f8d000",
             "path": "#38c0f8",
         },
         "art": METROID_ART,
-        "title": METROID_TITLE,
+        "label": "metroid theme",
         "tagline": "The last cartridge is in captivity.  The galaxy is at peace.",
         "border": "#f85000",
     },
@@ -156,15 +156,15 @@ SUPPORTED_EXTENSIONS: set = {
 # --------------------------------------------------------------------------- #
 
 def print_header() -> None:
-    """Render the themed application banner (emblem + title) at the top of a session."""
+    """Render the themed banner: emblem + the app name (ROM STUFFER) + theme caption."""
     theme = THEMES[_active_theme["name"]]
     art = Text.from_markup(theme["art"], justify="center")
-    title = Text.from_markup(theme["title"], justify="center")
-    sub = Text("ROM STUFFER", style="muted", justify="center")
+    title = Text("R O M   S T U F F E R", style="brand", justify="center")
+    caption = Text(f"‹ {theme['label']} ›", style="muted", justify="center")
     tagline = Text(theme["tagline"], style="muted", justify="center")
     console.print()
     console.print(Panel(
-        Align.center(Group(art, Text(), title, sub, Text(), tagline)),
+        Align.center(Group(art, Text(), title, caption, Text(), tagline)),
         box=box.DOUBLE,
         border_style=theme["border"],
         padding=(1, 4),
@@ -217,6 +217,62 @@ def format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024):.2f} MB"
     else:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+
+
+# --------------------------------------------------------------------------- #
+# Disc-image / BIOS guard.
+#
+# '.bin' is dangerously ambiguous: Sega Genesis and Atari 2600 CARTRIDGE dumps use
+# it (tiny — Genesis tops out ~8 MB), but so do CD/GD-ROM disc images (PS1, Saturn,
+# Sega CD, Dreamcast, PC Engine CD — hundreds of MB, usually beside a .cue/.gdi) and
+# BIOS files. Compressing a disc image breaks it, and moving a BIOS out of place
+# breaks the emulator. These checks keep genuine cartridge .bin files while refusing
+# disc images and BIOS. BIOS folders are off-limits for every extension.
+# --------------------------------------------------------------------------- #
+CARTRIDGE_BIN_MAX_BYTES: int = 16 * 1024 * 1024
+DISC_DESCRIPTOR_SUFFIXES: set = {'.cue', '.gdi', '.ccd', '.mds', '.toc', '.m3u'}
+DISC_SYSTEM_FOLDERS: set = {
+    'dreamcast', 'dc', 'saturn', 'segacd', 'sega-cd', 'megacd', 'mega-cd', 'mcd',
+    'psx', 'ps1', 'psone', 'playstation', 'pcecd', 'pce-cd', 'tgcd', 'turbografxcd',
+    'neogeocd', 'neo-geo-cd', '3do', 'jaguarcd', 'cdi', 'philipscdi', 'pcfx',
+    'naomi', 'atomiswave', 'fmtowns',
+}
+_disc_dir_cache: dict = {}
+
+
+def _dir_has_disc_descriptor(directory: Path) -> bool:
+    """True if a .cue/.gdi/... descriptor sits in this folder (cached per directory)."""
+    key = str(directory)
+    if key not in _disc_dir_cache:
+        found = False
+        try:
+            for entry in directory.iterdir():
+                if entry.suffix.lower() in DISC_DESCRIPTOR_SUFFIXES:
+                    found = True
+                    break
+        except OSError:
+            found = False
+        _disc_dir_cache[key] = found
+    return _disc_dir_cache[key]
+
+
+def exclusion_reason(path: Path, ext: str, size: int | None) -> str | None:
+    """Return why a supported-extension file must be refused (disc image or BIOS),
+    or None if it is a genuine cartridge ROM safe to compress and move."""
+    parts = {p.lower() for p in path.parent.parts}
+    # BIOS files must never be moved or compressed, whatever their extension.
+    if 'bios' in parts:
+        return "BIOS folder — must stay in place"
+    # '.bin' is the ambiguous one: disambiguate cartridge dumps from disc images.
+    if ext == '.bin':
+        disc_folder = parts & DISC_SYSTEM_FOLDERS
+        if disc_folder:
+            return f"disc-based system folder ('{sorted(disc_folder)[0]}')"
+        if _dir_has_disc_descriptor(path.parent):
+            return "disc image — a .cue/.gdi descriptor is present in the folder"
+        if size is not None and size > CARTRIDGE_BIN_MAX_BYTES:
+            return f"disc image — .bin is {format_size(size)}, too large for a cartridge"
+    return None
 
 
 def fast_sd_copy(
@@ -634,14 +690,32 @@ def _build_worklist_interactive(
             if p.is_file():
                 ext = p.suffix.lower()
                 if ext in SUPPORTED_EXTENSIONS:
-                    grouped_files[ext].append(p)
+                    size = None
+                    if ext == '.bin':
+                        try:
+                            size = p.stat().st_size
+                        except OSError:
+                            size = None
+                    reason = exclusion_reason(p, ext, size)
+                    if reason:
+                        metrics.skipped_files.append({'file': str(p.name), 'reason': reason})
+                    else:
+                        grouped_files[ext].append(p)
                 else:
                     metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unsupported extension: {p.suffix}"})
         except OSError as e:
             metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
 
+    disc_excluded = [s for s in metrics.skipped_files if 'disc' in s['reason'] or 'BIOS' in s['reason']]
+    if disc_excluded:
+        console.print(
+            f"[warn]Protected {len(disc_excluded)} disc-image / BIOS file(s)[/warn] "
+            f"[muted]— CD-based systems (PS1, Saturn, Dreamcast…) and BIOS are never "
+            f"compressed or moved. See the report for the list.[/muted]"
+        )
+
     if not grouped_files:
-        console.print("[yellow]No supported ROM files found.[/yellow]")
+        console.print("[yellow]No supported cartridge ROM files found.[/yellow]")
         return []
 
     selected: list[Path] = []
@@ -817,7 +891,17 @@ def compress_roms(
         for p in scan_iter:
             try:
                 if p.is_file() and p.suffix.lower() == file_type:
-                    files_to_process.append(p)
+                    size = None
+                    if file_type == '.bin':
+                        try:
+                            size = p.stat().st_size
+                        except OSError:
+                            size = None
+                    reason = exclusion_reason(p, file_type, size)
+                    if reason:
+                        metrics.skipped_files.append({'file': str(p.name), 'reason': reason})
+                    else:
+                        files_to_process.append(p)
             except OSError as e:
                 metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
         if not files_to_process:
