@@ -468,7 +468,15 @@ def compress_batch(
                 metrics.errors.append({'file': str(file_path.name), 'error': str(e)})
 
             finally:
+                # Live running space-saved readout so progress is visible on long runs,
+                # not only in the final summary.
+                saved = metrics.original_size_bytes - metrics.zip_size_bytes
+                pct = (saved / metrics.original_size_bytes * 100) if metrics.original_size_bytes else 0.0
                 progress.update(overall_task, description="[accent]Files[/accent]")
+                progress.update(
+                    byte_task,
+                    description=f"[info]Data [/info][muted]· saved[/muted] [success]{format_size(saved)}[/success] [muted]({pct:.0f}%)[/muted]",
+                )
                 progress.advance(overall_task)
                 progress.advance(byte_task, advance=original_size)
 
