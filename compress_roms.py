@@ -234,11 +234,27 @@ def format_size(size_bytes: int) -> str:
 # --------------------------------------------------------------------------- #
 CARTRIDGE_BIN_MAX_BYTES: int = 16 * 1024 * 1024
 DISC_DESCRIPTOR_SUFFIXES: set = {'.cue', '.gdi', '.ccd', '.mds', '.toc', '.m3u'}
+# Folders whose contents are NOT cartridge ROMs — optical-disc, UMD, HDD, or arcade
+# systems (and their common RetroArch/EmulationStation aliases). A '.bin' in any of
+# these is a disc image / data blob, never a Genesis cartridge, so it must never be
+# compressed or moved. Matched case-insensitively against each path component.
 DISC_SYSTEM_FOLDERS: set = {
-    'dreamcast', 'dc', 'saturn', 'segacd', 'sega-cd', 'megacd', 'mega-cd', 'mcd',
-    'psx', 'ps1', 'psone', 'playstation', 'pcecd', 'pce-cd', 'tgcd', 'turbografxcd',
-    'neogeocd', 'neo-geo-cd', '3do', 'jaguarcd', 'cdi', 'philipscdi', 'pcfx',
-    'naomi', 'atomiswave', 'fmtowns',
+    # Sony — all disc / UMD / HDD
+    'psx', 'ps1', 'psone', 'playstation', 'ps2', 'playstation2', 'ps3', 'playstation3',
+    'psp', 'playstationportable', 'psvita', 'vita',
+    # Sega — optical
+    'dreamcast', 'dc', 'saturn', 'saturnjp', 'segacd', 'sega-cd', 'megacd', 'mega-cd',
+    'mcd', 'naomi', 'atomiswave',
+    # NEC and other optical
+    'pcecd', 'pce-cd', 'pcenginecd', 'tgcd', 'turbografxcd', 'pcfx', 'neogeocd',
+    'neo-geo-cd', 'amigacd32', 'cd32', '3do', 'jaguarcd', 'cdi', 'cdimono1',
+    'philipscdi', 'fmtowns', 'fmtownsmarty',
+    # Nintendo — disc / HDD-scale
+    'gamecube', 'gc', 'ngc', 'wii', 'wiiu', 'switch',
+    # Microsoft
+    'xbox', 'xbox360', 'xboxone',
+    # Arcade (ROM sets ship zipped) and BIOS
+    'mame', 'fbneo', 'fba', 'arcade', 'cps1', 'cps2', 'cps3', 'model2', 'model3', 'bios',
 }
 _disc_dir_cache: dict = {}
 
@@ -259,10 +275,21 @@ def _dir_has_disc_descriptor(directory: Path) -> bool:
     return _disc_dir_cache[key]
 
 
-def exclusion_reason(path: Path, ext: str, size: int | None) -> str | None:
+def exclusion_reason(path: Path, ext: str, size: int | None, source: Path | None = None) -> str | None:
     """Return why a supported-extension file must be refused (disc image or BIOS),
-    or None if it is a genuine cartridge ROM safe to compress and move."""
-    parts = {p.lower() for p in path.parent.parts}
+    or None if it is a genuine cartridge ROM safe to compress and move.
+
+    Only folder names *inside* the source tree are considered (the system-organisation
+    folders), never parent directories above the source, so a source path that happens
+    to sit under a folder like 'psp' or 'bios' does not exclude everything.
+    """
+    relevant = path.parent
+    if source is not None:
+        try:
+            relevant = path.relative_to(source).parent
+        except ValueError:
+            relevant = path.parent
+    parts = {p.lower() for p in relevant.parts}
     # BIOS files must never be moved or compressed, whatever their extension.
     if 'bios' in parts:
         return "BIOS folder — must stay in place"
@@ -699,7 +726,7 @@ def _build_worklist_interactive(
                             size = p.stat().st_size
                         except OSError:
                             size = None
-                    reason = exclusion_reason(p, ext, size)
+                    reason = exclusion_reason(p, ext, size, source_path)
                     if reason:
                         metrics.skipped_files.append({'file': str(p.name), 'reason': reason})
                     else:
@@ -914,7 +941,7 @@ def compress_roms(
                             size = p.stat().st_size
                         except OSError:
                             size = None
-                    reason = exclusion_reason(p, file_type, size)
+                    reason = exclusion_reason(p, file_type, size, source_path)
                     if reason:
                         metrics.skipped_files.append({'file': str(p.name), 'reason': reason})
                     else:
