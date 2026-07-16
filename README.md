@@ -27,7 +27,7 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 3.  **Fast Decompression:** Uses "Normal" compression levels rather than "Ultra." This ensures that lower-powered handhelds can instantly decompress the game on-the-fly without stuttering.
 4.  **Organized Backups:** Moving your uncompressed files into a single dump folder is messy. `rom_stuffer` recreates your exact subdirectory structure in the backup folder automatically.
 5.  **SD Card Fast-Sync:** Built-in sequential 16MB-buffered bulk I/O allows you to reconcile newly compressed files directly to your SD card. It auto-deletes the old uncompressed files and maximizes flash-memory write speeds.
-5.  **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed error report both to the screen (via a beautiful TUI) and to a text log file.
+6.  **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed error report both to the screen (via a beautiful TUI) and to a text log file.
 
 ## Requirements
 
@@ -114,3 +114,12 @@ Your SD card (`E:\ROMS\snes\`) will now contain:
 Your backup drive (`D:\Backups\snes_raw\`) will automatically have the folders created and contain:
 *   `Action\Super Metroid.sfc`
 *   `RPG\Chrono Trigger.sfc`
+
+### Example 3: SD Card Fast-Sync
+If you want to compress your local PC ROMs, back up the originals locally, but instantly push the new `.zip` versions out to your inserted SD Card while deleting the uncompressed versions off the SD Card:
+
+```bash
+python compress_roms.py -s "C:\MyROMs" -d "D:\RetroBackups" -sd "F:\"
+```
+
+*The script will find `C:\MyROMs\gba\game.gba`, compress it to `game.zip`, move the original to `D:\RetroBackups\gba\game.gba`. Then, it will check `F:\gba\game.gba`. If it exists, it deletes it from the SD card and copies the new `game.zip` to the SD card at extremely high speeds using a 16MB sequential buffer.*

@@ -6,32 +6,30 @@
 Hello! If you are an AI reading this, this document brings you fully up to speed on the `rom_stuffer` project. This project was conceptualized and built to solve a specific workflow for managing retro gaming ROMs on Windows, specifically targeting handheld emulator devices like the R36S, R36XX, and Ayn Thor.
 
 ## Project Purpose
-The core objective is to have a command-line script that:
-1. Recursively scans a specified source directory for a specific ROM file extension (e.g., `.gba`).
+The core objective is to have a robust script that:
+1. Recursively scans a specified source directory for cartridge-based ROM file extensions.
 2. Compresses each matching ROM file into its *own individual* `.zip` archive.
-3. Moves the original, uncompressed ROM file to a specified backup destination folder.
-4. Preserves the original relative directory structure within the backup destination.
+3. Moves the original, uncompressed ROM file to a specified backup destination folder while preserving the relative directory tree.
+4. Reconciles and fast-syncs the newly compressed `.zip` files directly to a mounted SD Card.
 
-## Background Research
-During the planning phase, we researched ZIP compression compatibility with **RetroArch** (the underlying emulator layer for OSes like ArkOS and AmberELEC used on these handhelds):
-*   **Compression Level:** RetroArch relies on standard `zlib` for decompression. Using "Maximum" or "Ultra" compression levels can cause noticeable lag or stuttering on lower-powered handhelds during load times. "Normal" (Level 6 DEFLATE) compression was chosen as the optimal balance between file size reduction and decompression speed.
-*   **Archive Grouping:** Emulators struggle with "solid" archives or ZIPs containing multiple games. The strict requirement is **one ROM per ZIP file**, named identically to the ROM.
-*   **Cartridge vs. CD-Based:** 
-    *   *Cartridge Systems* (NES, SNES, Genesis, GBA) work perfectly from `.zip` archives because the emulator loads the entire file into RAM.
-    *   *CD-Based Systems* (PS1, Saturn, Sega CD) **do not** run well from `.zip` files because they require random access to track data. `.chd` or `.pbp` formats are the community standard for disc games.
+## Phase 1: Core Foundation & Rules
+During the planning phase, we researched ZIP compression compatibility with **RetroArch**:
+*   **Compression Level:** RetroArch relies on standard `zlib`. "Ultra" compression can cause lag on lower-powered handhelds. "Normal" (Level 6 DEFLATE) was hardcoded as the optimal balance.
+*   **Archive Grouping:** The strict requirement is **one ROM per ZIP file**, named identically to the ROM.
+*   **Cartridge vs. CD-Based:** Cartridge Systems (NES, GBA) work perfectly from `.zip`. CD-Based Systems (PS1, Sega CD) **do not** run well from `.zip`. We explicitly codified this and excluded CD-based extensions from our supported lists.
+*   **N64 & MAME Exclusions:** We explicitly excluded N64 from `.zip` automation due to performance overhead on low-end devices. MAME was excluded because arcade ROMs are naturally distributed as highly-dependent zip archives and shouldn't be touched.
 
-## Decisions Made & Scope Codification
-We engaged in a Q&A to nail down the exact technical requirements. Here are the decisions we made:
-1.  **Language:** Python was chosen over PowerShell for better cross-platform compatibility, readability, and ease of maintenance, despite the user running it on Windows.
-2.  **Archive Grouping:** 1:1 mapping. Each ROM gets its own ZIP.
-3.  **Recursive Scanning:** The script must dig through all subfolders in the source directory.
-4.  **Directory Structure:** When the original uncompressed file is moved to the backup location, the script must recreate the original subdirectory tree so the backups remain organized.
-5.  **Compression Level:** "Normal" (DEFLATE Level 6) is hardcoded via `zipfile.ZIP_DEFLATED`.
-6.  **Scope Limitation:** The script is strictly for cartridge-based games. We explicitly decided *not* to support CD-based games, and added warnings to the terminal output and README to reflect this.
+## Phase 2: TUI and Reporting
+We transitioned the script from a basic CLI tool to a rich Text User Interface (TUI).
+*   **Rich Integration:** We introduced the `rich` Python library (`requirements.txt`). This provided interactive `[y/n]` prompts per file extension, progress bars for compression batches, and styled tables for outputs.
+*   **Metrics Engine:** We implemented a `SessionMetrics` class to track total files, success/fail counts, and the exact byte-size before and after compression to calculate total "Space Saved".
+*   **Log Generation:** At the end of a session, a detailed table report is rendered to the screen and automatically saved to a `rom_stuffer_report.txt` file in the backup destination folder.
 
-## What Has Been Built
-1.  `compress_roms.py`: The main Python script. It uses `argparse` for CLI inputs, `pathlib` for robust path manipulation and recursive scanning (`rglob`), `zipfile` for standard compression, and `shutil` for moving files.
-2.  `README.md`: Comprehensive documentation for the user, detailing usage, requirements, and the explicit warnings regarding CD-based games.
+## Phase 3: SD Card Reconciliation & Fast-Sync
+The user wanted the script to seamlessly sync the newly compressed files directly to the target SD Card. 
+*   **Parallel vs Sequential Research:** The user initially requested parallelizing the copy to mimic Windows `FastCopy`. However, our research proved that parallelizing I/O to an SD Card (flash memory) causes severe "thrashing" because of the simplistic memory controller. True `FastCopy` behavior on external flash media relies on *sequential bulk I/O*.
+*   **The Implementation:** We created a `fast_sd_copy()` function that utilizes `shutil.copyfileobj` with a massive **16MB buffer**. This drastically minimizes OS kernel context switches and maximizes sustained sequential write speeds.
+*   **The Workflow:** If the `--sdcard` flag is used (or provided interactively), the script immediately seeks out the old uncompressed `.gba`/`.sfc` on the SD card, deletes it, and drops the new `.zip` in its place using the high-speed 16MB buffered copy.
 
 ## Current Status
-The script is complete, functional, and resides in the project folder. All initial requirements have been met. Any future work will likely revolve around edge cases (e.g., handling duplicate files in the destination, adding parallel processing for speed, or supporting multiple file extensions simultaneously).
+The project is fully functional, heavily optimized for its specific use-case, and completely documented in `README.md`.
