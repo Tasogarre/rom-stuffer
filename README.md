@@ -13,7 +13,7 @@
 
 </div>
 
----
+<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
 
 `rom_stuffer` is a command-line Python utility that streamlines managing retro gaming ROMs. It recursively scans a directory for cartridge ROM files, compresses each game into its own highly-compatible `.zip` archive, and safely moves the original uncompressed files to a backup location while perfectly preserving your folder structure.
 
@@ -51,13 +51,13 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 
 <div align="center">
 
-<img src="assets/screenshot-zelda.png" alt="ROM Stuffer running in the Legend of Zelda theme" width="80%">
+<img src="assets/screenshot-zelda.png" alt="ROM Stuffer running in the zelda theme" width="80%">
 
-<sub>The interactive UI in the **Zelda** theme — pick **Metroid** any time with `--theme metroid`. See [Themes](#themes).</sub>
+<sub>The interactive UI in the **zelda** theme — pick **metroid** any time with `--theme metroid`. See [Themes](#themes).</sub>
 
 </div>
 
----
+<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
 
 ## Requirements
 
@@ -242,7 +242,7 @@ Each theme re-skins the entire interface — banner, panels, section rules, prog
 </tr>
 </table>
 
----
+<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
 
 ## Resuming an interrupted job
 
@@ -303,6 +303,9 @@ The built-in library recognises the following cartridge ROM extensions automatic
 - **Amiga:** `.adf`, `.dms`, `.fdi`, `.ipf`, `.hdf`, `.hdz`
 - **Home Computers:** `.msx`, `.rom`, `.dsk`, `.z80`, `.tzx`, `.cdt`
 - **Other:** `.ws`, `.wsc`, `.ngp`, `.ngc`, `.col`, `.int`, `.vec`, `.chf`, `.o2`
+
+> [!IMPORTANT]
+> **`.bin` is handled with care.** The `.bin` extension is used both by Sega Genesis / Atari 2600 **cartridge** dumps (safe to compress) *and* by CD/GD-ROM **disc images** (PS1, Saturn, Sega CD, **Dreamcast**, PC Engine CD) and **BIOS** files (never safe). rom_stuffer automatically **refuses** a `.bin` when it looks like a disc image or BIOS — if it sits in a disc-system or `bios` folder, has a companion `.cue`/`.gdi` descriptor, or is larger than a cartridge could be (>16 MB) — and lists the reason in the report. Genuine cartridge `.bin` dumps are still compressed normally.
 
 > [!NOTE]
 > **CD-Based Systems Exclusion:** Disc images (PS1, Sega CD, Saturn, Dreamcast) are completely excluded. Emulators must seek and stream large tracks directly from the file, and `.zip` extraction overhead will cause severe stuttering. Use `.chd` format instead.
