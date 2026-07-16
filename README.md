@@ -66,14 +66,20 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 
 The built-in library recognizes the following cartridge ROM extensions automatically:
 
-*   **Nintendo:** `.nes`, `.sfc`, `.smc`, `.fig`, `.swc`, `.gb`, `.gbc`, `.gba`, `.fds`
-*   **Sega:** `.bin`, `.gen`, `.md`, `.smd`, `.sms`, `.gg`
+*   **Nintendo:** `.nes`, `.sfc`, `.smc`, `.fig`, `.swc`, `.gb`, `.gbc`, `.gba`, `.fds`, `.vb`, `.vboy`, `.min`, `.mgw`
+*   **Sega:** `.bin`, `.gen`, `.md`, `.smd`, `.sms`, `.gg`, `.sg`, `.32x`
+*   **NEC:** `.pce`, `.sgx`
 *   **Atari:** `.a26`, `.a52`, `.a78`, `.j64`, `.lnx`, `.atr`, `.atx`, `.xfd`, `.xex`, `.cas`, `.st`
+*   **Commodore:** `.crt`, `.d64`, `.t64`, `.prg`, `.tap`, `.d81`, `.g64`
 *   **Amiga:** `.adf`, `.dms`, `.fdi`, `.ipf`, `.hdf`, `.hdz`
-*   **Other:** `.ws`, `.wsc`, `.ngp`, `.ngc`
+*   **Home Computers:** `.msx`, `.rom`, `.dsk`, `.z80`, `.tzx`, `.cdt`
+*   **Other:** `.ws`, `.wsc`, `.ngp`, `.ngc`, `.col`, `.int`, `.vec`, `.chf`, `.o2`
 
 > [!NOTE]
-> **N64 Exclusion:** Nintendo 64 extensions (`.n64`, `.z64`) are explicitly excluded. N64 emulation is highly demanding on RetroArch, and the overhead of extracting files from `.zip` archives on lower-powered devices can severely exacerbate audio/video stuttering.
+> **CD-Based Systems Exclusion:** Disc images (PS1, Sega CD, Saturn, Dreamcast) are completely excluded. Emulators must seek and stream large tracks directly from the file, and `.zip` extraction overhead will cause severe stuttering. Use `.chd` format instead.
+
+> [!NOTE]
+> **N64 / NDS Exclusion:** Nintendo 64 and Nintendo DS extensions are explicitly excluded. The overhead of extracting these larger files from `.zip` archives on lower-powered devices can severely exacerbate audio/video stuttering.
 
 > [!NOTE]
 > **MAME / Arcade Exclusion:** Arcade ROMs are not supported by this tool because they are already distributed and required to be in `.zip` or `.7z` format by default. You should never decompress MAME ROMs.
@@ -86,6 +92,7 @@ The built-in library recognizes the following cartridge ROM extensions automatic
 | `--dest` | `-d` | **(Required)** The destination directory where the original, uncompressed files will be safely moved. |
 | `--type` | `-t` | **(Optional)** A specific file extension to target (e.g., `.gba`). If provided, it bypasses the interactive prompts and only processes this exact type. |
 | `--sdcard` | `-sd` | **(Optional)** A destination SD Card directory to immediately sync newly compressed `.zip` files to. Old uncompressed versions on the SD card will be automatically deleted. |
+| `--dry-run` | | **(Optional)** Preview what will happen without actually modifying or copying any files. Generates the report based on estimates. |
 | `--help` | `-h` | Shows the help menu and exits. |
 
 ## Examples
