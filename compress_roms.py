@@ -41,6 +41,8 @@ class SessionMetrics:
         self.zip_size_bytes = 0
         self.success_count = 0
         self.error_count = 0
+        self.sd_files_synced = 0
+        self.sd_bytes_copied = 0
         self.affected_folders = set()
         self.errors = []
 
@@ -54,7 +56,17 @@ def format_size(size_bytes):
     else:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
-def compress_batch(files_to_process, source_path, dest_path, metrics):
+def fast_sd_copy(source_path, dest_path, buffer_size=16 * 1024 * 1024):
+    """
+    Copies a file using a large buffer (default 16MB) to maximize 
+    sequential write speeds on flash media like SD cards, avoiding OS caching overhead.
+    """
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(source_path, 'rb') as fsrc:
+        with open(dest_path, 'wb') as fdst:
+            shutil.copyfileobj(fsrc, fdst, length=buffer_size)
+
+def compress_batch(files_to_process, source_path, dest_path, metrics, sdcard_path=None):
     with Progress(
         SpinnerColumn(),
         TextColumn("[progress.description]{task.description}"),
@@ -78,6 +90,21 @@ def compress_batch(files_to_process, source_path, dest_path, metrics):
                     
                 zip_size = zip_path.stat().st_size
 
+                # SD Card Reconciliation Logic
+                if sdcard_path:
+                    progress.update(task, description=f"[magenta]Syncing {file_path.name} to SD...[/magenta]")
+                    sd_equivalent_original = sdcard_path / rel_path
+                    sd_equivalent_zip = sd_equivalent_original.with_suffix('.zip')
+                    
+                    # Delete original on SD card if it exists
+                    if sd_equivalent_original.exists():
+                        sd_equivalent_original.unlink()
+                        
+                    # Fast copy the zip to SD card
+                    fast_sd_copy(zip_path, sd_equivalent_zip)
+                    metrics.sd_files_synced += 1
+                    metrics.sd_bytes_copied += zip_size
+
                 shutil.move(str(file_path), str(original_dest))
                 
                 metrics.original_size_bytes += original_size
@@ -90,6 +117,7 @@ def compress_batch(files_to_process, source_path, dest_path, metrics):
                 metrics.error_count += 1
                 metrics.errors.append({'file': str(file_path.name), 'error': str(e)})
             
+            progress.update(task, description="[cyan]Compressing...")
             progress.advance(task)
 
 def generate_reports(metrics, dest_dir):
@@ -112,6 +140,10 @@ def generate_reports(metrics, dest_dir):
     summary_table.add_row("Original Size", format_size(metrics.original_size_bytes))
     summary_table.add_row("Compressed Size", format_size(metrics.zip_size_bytes))
     summary_table.add_row("Total Space Saved", format_size(saved_bytes))
+    
+    if metrics.sd_files_synced > 0:
+        summary_table.add_row("SD Card Files Synced", str(metrics.sd_files_synced))
+        summary_table.add_row("SD Card Data Written", format_size(metrics.sd_bytes_copied))
 
     # 3. Error Report Table
     error_table = None
@@ -142,7 +174,11 @@ def generate_reports(metrics, dest_dir):
             f.write(f"Failed: {metrics.error_count}\n")
             f.write(f"Original Size: {format_size(metrics.original_size_bytes)}\n")
             f.write(f"Compressed Size: {format_size(metrics.zip_size_bytes)}\n")
-            f.write(f"Total Space Saved: {format_size(saved_bytes)}\n\n")
+            f.write(f"Total Space Saved: {format_size(saved_bytes)}\n")
+            if metrics.sd_files_synced > 0:
+                f.write(f"SD Card Files Synced: {metrics.sd_files_synced}\n")
+                f.write(f"SD Card Data Written: {format_size(metrics.sd_bytes_copied)}\n")
+            f.write("\n")
             
             f.write("--- AFFECTED FOLDERS ---\n")
             for folder in sorted(metrics.affected_folders):
@@ -160,7 +196,7 @@ def generate_reports(metrics, dest_dir):
     except Exception as e:
         console.print(f"[bold red]Failed to write log file: {e}[/bold red]")
 
-def compress_roms(source_dir, file_type, dest_dir):
+def compress_roms(source_dir, file_type, dest_dir, sdcard_dir=None):
     source_path = Path(source_dir).resolve()
     dest_path = Path(dest_dir).resolve()
 
@@ -172,6 +208,23 @@ def compress_roms(source_dir, file_type, dest_dir):
 
     dest_path.mkdir(parents=True, exist_ok=True)
     metrics = SessionMetrics()
+    
+    sdcard_path = None
+    if sdcard_dir:
+        sdcard_path = Path(sdcard_dir).resolve()
+        if not sdcard_path.exists() or not sdcard_path.is_dir():
+            console.print(f"[bold red]Error: SD Card directory '{sdcard_path}' does not exist.[/bold red]")
+            sys.exit(1)
+        console.print(f"[bold green]SD Card Sync Enabled:[/bold green] Pointing to {sdcard_path}\n")
+    elif not file_type:
+        if Confirm.ask("\nDo you want to sync the compressed ROMs directly to an SD Card after compressing?"):
+            sd_input = input("Enter the path to the SD Card (e.g., F:\\ or /Volumes/SDCARD): ").strip()
+            if sd_input:
+                sdcard_path = Path(sd_input).resolve()
+                if not sdcard_path.exists() or not sdcard_path.is_dir():
+                    console.print(f"[bold red]Error: SD Card directory '{sdcard_path}' does not exist.[/bold red]")
+                    sys.exit(1)
+                console.print(f"[bold green]SD Card Sync Enabled:[/bold green] Pointing to {sdcard_path}\n")
 
     if file_type:
         if not file_type.startswith('.'):
@@ -184,7 +237,7 @@ def compress_roms(source_dir, file_type, dest_dir):
             return
 
         console.print(f"Found [bold]{len(files_to_process)}[/bold] files to process.")
-        compress_batch(files_to_process, source_path, dest_path, metrics)
+        compress_batch(files_to_process, source_path, dest_path, metrics, sdcard_path)
         generate_reports(metrics, dest_dir)
         return
 
@@ -213,7 +266,7 @@ def compress_roms(source_dir, file_type, dest_dir):
             console.print(f"  - ... and {len(folders) - 5} more")
 
         if Confirm.ask(f"Do you want to compress and move these [bold]{ext}[/bold] files?"):
-            compress_batch(files, source_path, dest_path, metrics)
+            compress_batch(files, source_path, dest_path, metrics, sdcard_path)
         else:
             console.print(f"[yellow]Skipping {ext} files.[/yellow]")
 
@@ -229,8 +282,9 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--source", required=True, help="Source directory to scan for ROMs")
     parser.add_argument("-t", "--type", required=False, help="Optional: specific file extension to target bypassing prompts (e.g., .gba)")
     parser.add_argument("-d", "--dest", required=True, help="Destination directory to move original files to")
+    parser.add_argument("-sd", "--sdcard", required=False, help="Optional: Destination SD card directory to sync the compressed files to.")
 
     args = parser.parse_args()
 
-    compress_roms(args.source, args.type, args.dest)
+    compress_roms(args.source, args.type, args.dest, args.sdcard)
 

@@ -26,6 +26,7 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 2.  **Optimized for Emulators:** Emulators hate "solid" archives or ZIPs with multiple games in them. `rom_stuffer` ensures every single ROM gets its own individual `.zip` file, which is exactly what RetroArch expects.
 3.  **Fast Decompression:** Uses "Normal" compression levels rather than "Ultra." This ensures that lower-powered handhelds can instantly decompress the game on-the-fly without stuttering.
 4.  **Organized Backups:** Moving your uncompressed files into a single dump folder is messy. `rom_stuffer` recreates your exact subdirectory structure in the backup folder automatically.
+5.  **SD Card Fast-Sync:** Built-in sequential 16MB-buffered bulk I/O allows you to reconcile newly compressed files directly to your SD card. It auto-deletes the old uncompressed files and maximizes flash-memory write speeds.
 5.  **Detailed Reporting:** Calculates space saved, lists exactly which folders were modified, and outputs a detailed error report both to the screen (via a beautiful TUI) and to a text log file.
 
 ## Requirements
@@ -58,7 +59,7 @@ By default, `rom_stuffer` runs in **Interactive Mode**. It will scan the source 
 Open your terminal or Command Prompt and run the script using the following syntax:
 
 ```bash
-python compress_roms.py --source "<source_directory>" --dest "<backup_directory>"
+python compress_roms.py --source "<source_directory>" --dest "<backup_directory>" --sdcard "<sd_card_drive>"
 ```
 
 ### Supported Extensions
@@ -84,6 +85,7 @@ The built-in library recognizes the following cartridge ROM extensions automatic
 | `--source` | `-s` | **(Required)** The directory to scan for ROMs. The script searches recursively through all subfolders. |
 | `--dest` | `-d` | **(Required)** The destination directory where the original, uncompressed files will be safely moved. |
 | `--type` | `-t` | **(Optional)** A specific file extension to target (e.g., `.gba`). If provided, it bypasses the interactive prompts and only processes this exact type. |
+| `--sdcard` | `-sd` | **(Optional)** A destination SD Card directory to immediately sync newly compressed `.zip` files to. Old uncompressed versions on the SD card will be automatically deleted. |
 | `--help` | `-h` | Shows the help menu and exits. |
 
 ## Examples
