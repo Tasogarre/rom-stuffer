@@ -224,11 +224,12 @@ def format_size(size_bytes: int) -> str:
 
 def describe_error(e: Exception) -> str:
     """Human-readable error text. An OSError's str() embeds repr(filename), which
-    doubles backslashes on Windows paths (C:\\\\Games); use the raw strerror and
-    filename (single backslash) instead."""
-    if isinstance(e, OSError):
-        msg = e.strerror or e.__class__.__name__
-        return f"{msg}: {e.filename}" if e.filename else msg
+    doubles backslashes on Windows paths (C:\\\\Games); when the OS gives us a
+    strerror, build the message from strerror + the raw filename (single backslash)
+    instead. Otherwise fall back to str() (which carries the message and, for
+    non-OS/message-style errors, no repr'd path)."""
+    if isinstance(e, OSError) and e.strerror:
+        return f"{e.strerror}: {e.filename}" if e.filename else e.strerror
     return str(e)
 
 
