@@ -13,7 +13,7 @@
 
 </div>
 
-<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
+<div align="center"><img src="assets/divider.png" alt="tetromino divider" width="60%"></div>
 
 `rom_stuffer` is a command-line Python utility for fitting the **most games onto an SD card** for retro handhelds. It has three capabilities, all sharing the same safety guards, themed TUI, and reporting:
 
@@ -63,7 +63,7 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 
 </div>
 
-<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
+<div align="center"><img src="assets/divider.png" alt="tetromino divider" width="60%"></div>
 
 ## Requirements
 
@@ -413,7 +413,7 @@ Each theme re-skins the entire interface — banner, panels, section rules, prog
 </tr>
 </table>
 
-<div align="center"><img src="assets/divider.png" alt="◢◣◣" width="60%"></div>
+<div align="center"><img src="assets/divider.png" alt="tetromino divider" width="60%"></div>
 
 ## Resuming an interrupted job
 
