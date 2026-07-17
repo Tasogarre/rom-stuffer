@@ -248,6 +248,65 @@ class RomTree:
 
 
 # ---------------------------------------------------------------------------
+# realistic_library: a multi-system tree with controlled sizes for the estimator
+# ---------------------------------------------------------------------------
+
+# The compression ratio the estimator applies to RAW files. Kept here so tests and
+# the builder agree on one source of truth for the hand-computed expectations.
+REALISTIC_COMPRESS_RATIO: float = 0.4
+
+# Raw cartridge ROMs: (system_folder, filename, size_bytes, seed). Sizes are chosen
+# so every value is unique EXCEPT the two intended duplicate pairs, which keeps
+# size-bucketing from producing any accidental groups:
+#   - gb/Tetris.gb == gb/Tetris_copy.gb  (WITHIN-system dup: size 50000, seed 0x21)
+#   - megadrive/Shared.md == gb/Shared.gb (CROSS-system dup: size 90000, seed 0x33)
+REALISTIC_RAW_FILES: list[tuple[str, str, int, int]] = [
+    ("megadrive", "Sonic.md", 100_000, 0x11),
+    ("megadrive", "Sonic2.md", 120_000, 0x12),
+    ("megadrive", "Shared.md", 90_000, 0x33),
+    ("gb", "Tetris.gb", 50_000, 0x21),
+    ("gb", "Tetris_copy.gb", 50_000, 0x21),
+    ("gb", "Shared.gb", 90_000, 0x33),
+    ("snes", "Zelda.sfc", 200_000, 0x41),
+]
+
+# Pre-zipped ROMs: (system_folder, zip_filename, entry_name, logical_size, seed).
+# The zip's DECOMPRESSED size is `logical_size`; its COMPRESSED (on-disk) size is
+# whatever DEFLATE produces, so tests read it back with stat() rather than guessing.
+REALISTIC_ZIP_FILES: list[tuple[str, str, str, int, int]] = [
+    ("snes", "Mario.zip", "Mario.sfc", 80_000, 0x42),
+]
+
+
+def realistic_library(tmp_path: Path, name: str = "library") -> RomTree:
+    """Build a multi-system ROM tree with CONTROLLED sizes for estimator tests.
+
+    Layout (all sizes fixed; see ``REALISTIC_RAW_FILES`` / ``REALISTIC_ZIP_FILES``):
+
+    - ``megadrive/`` , ``gb/`` , ``snes/`` -- cartridge systems, a mix of raw ROMs
+      and one pre-zipped ROM (``snes/Mario.zip``).
+    - Known duplicate pairs: ``gb/Tetris.gb`` == ``gb/Tetris_copy.gb`` (within a
+      system) and ``megadrive/Shared.md`` == ``gb/Shared.gb`` (across systems).
+    - ``bios/`` and a ``dreamcast/`` disc folder that MUST be excluded from every
+      number by the guards.
+
+    Returns the :class:`RomTree`; ``tree.source`` is the root to hand the estimator.
+    Numbers are hand-computable from the module constants above, e.g. a raw file's
+    estimated compressed size is ``size * REALISTIC_COMPRESS_RATIO``.
+    """
+    tree = RomTree(tmp_path / name)
+    for folder, filename, size, seed in REALISTIC_RAW_FILES:
+        tree.cartridge(folder, filename, content=rom_bytes(size, seed=seed))
+    for folder, zip_name, entry, size, seed in REALISTIC_ZIP_FILES:
+        make_zip(tree.root / folder / zip_name, entry, rom_bytes(size, seed=seed))
+        tree._files.append(tree.root / folder / zip_name)
+    # Excluded by the guards -- must contribute nothing to the estimate.
+    tree.bios()                     # bios/scph1001.bin
+    tree.disc_folder("dreamcast")   # dreamcast/Track01.bin (17 MB) + .cue
+    return tree
+
+
+# ---------------------------------------------------------------------------
 # Convenience fixtures
 # ---------------------------------------------------------------------------
 
