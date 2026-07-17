@@ -35,16 +35,29 @@ test regresses; the specific invariants stated in "Safety Invariants" below are 
 content_sha256`. The shim at `compress_roms.py` must keep the old import path working
 throughout.
 
-**Test infrastructure.** A helper module `tests/helpers.py` is created as part of U1.
-It provides:
-- `make_rom_tree(tmp_path: Path, spec: dict) -> dict[str, Path]` — creates a synthetic
-  ROM file tree under `tmp_path`. `spec` maps relative path strings to byte content
-  (bytes or int for a repeating-byte file of that size). Returns a mapping of the same
-  relative paths to absolute `Path` objects.
-- `class CrashSimulator` — context manager; takes `fail_at: int` (0-indexed) and wraps
-  a callable; raises `OSError("simulated crash")` on the Nth call.
-All tests import from `tests.helpers` (no package `__init__.py` required; use
-`sys.path` insertion or `conftest.py`).
+**Test infrastructure (AUTHORITATIVE — already built and shipped).** The test
+foundation exists on `main`: `pyproject.toml` (pytest config; `pythonpath=[".","tests"]`),
+`conftest.py` (autouse fixture clearing `guards._disc_dir_cache` between tests),
+`tests/helpers.py`, and `tests/crash_sim.py`. **Wherever a later section of this plan
+names `make_rom_tree(...)` or `CrashSimulator`, use the real API below instead** — the
+concepts map one-to-one:
+
+- `tests/helpers.py` provides a **fluent `RomTree` builder** (not a dict-spec function):
+  `RomTree(tmp_path)` with chainable methods `.cartridge(system, name, content=..., size=...)`,
+  `.cartridges(...)`, `.disc_folder(system, name, descriptor=".cue"|".gdi")`,
+  `.bios(name)`, `.oversized_bin(...)`, `.duplicate_pair(...)` (same content, different
+  names/folders), `.zip_pair(...)` (a raw file + a `.zip` of the same content),
+  `.unicode_rom(...)`, `.bracket_rom(...)`. Plus module functions `make_zip(dest, rom_name,
+  content)` and `rom_bytes(size=64, seed=...)`, and two pytest fixtures. Build the tree you
+  need per test with these methods rather than a path→bytes dict.
+- `tests/crash_sim.py` provides **`CrashAfterN`** (context manager, `fail_at` count,
+  raises KeyboardInterrupt for a hard crash) and **`install_crashing_move(monkeypatch,
+  n, exc=OSError)`** — both patch `shutil.move` globally (resolved at call time). Use these
+  for resume/failure tests; call `monkeypatch.undo()` before a follow-up resume run.
+
+All test modules `import compress_roms as rs` (the compat shim). 84 behaviour tests
+already cover the current features (collision, resume, .bin/disc/BIOS guards, path
+guards, `describe_error`); new dedup tests join them under `tests/`.
 
 **Repo-relative paths only.** Every path in this document is relative to the repo
 root. "worktree root" and "repo root" are the same directory.
