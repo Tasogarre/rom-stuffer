@@ -33,7 +33,61 @@ METROID_ART = (
     "[brand]▚   ▚   ▚[/brand]"
 )
 
+# "kirby" theme emblem — an original pink pixel star (generic geometric shape).
+KIRBY_ART = (
+    "[brand]██[/brand]\n"
+    "[brand]████[/brand]\n"
+    "[brand]██████[/brand]\n"
+    "[brand]██████████████[/brand]\n"
+    "[brand]████████████[/brand]\n"
+    "[brand]██████████[/brand]\n"
+    "[brand]████  ████[/brand]"
+)
+
+# "tetris" theme emblem — a symmetric stack of colour block-pieces (generic grid).
+TETRIS_ART = (
+    "[info]████[/info]\n"
+    "[warn]████████[/warn]\n"
+    "[danger]██[/danger][success]████[/success][danger]██[/danger]\n"
+    "[accent]██[/accent][brand]████[/brand][accent]██[/accent]\n"
+    "[brand]████████████[/brand]"
+)
+
 THEMES: dict[str, dict] = {
+    "kirby": {
+        "styles": {
+            "brand": "bold #f884b8",      # pink
+            "accent": "#ff5c8a",          # deep rose
+            "info": "#7fd0f8",            # sky blue
+            "success": "bold #9be15d",    # green
+            "warn": "#ffd93d",            # yellow
+            "danger": "bold #ff4d6d",     # red
+            "muted": "dim #b98aa0",       # muted mauve
+            "value": "bold #ffd93d",
+            "path": "#7fd0f8",
+        },
+        "art": KIRBY_ART,
+        "label": "kirby theme",
+        "tagline": "Inhale the clutter.  Stuff your cartridges in.",
+        "border": "#f884b8",
+    },
+    "tetris": {
+        "styles": {
+            "brand": "bold #b388ff",      # block purple
+            "accent": "#29b6f6",          # block blue
+            "info": "#26c6da",            # block cyan
+            "success": "bold #66bb6a",    # block green
+            "warn": "#ffca28",            # block yellow
+            "danger": "bold #ef5350",     # block red
+            "muted": "dim #90a4ae",       # slate
+            "value": "bold #ffca28",
+            "path": "#29b6f6",
+        },
+        "art": TETRIS_ART,
+        "label": "tetris theme",
+        "tagline": "Pack them tight.  No wasted space.",
+        "border": "#b388ff",
+    },
     "zelda": {
         "styles": {
             "brand": "bold #f8c000",     # gold
@@ -69,7 +123,7 @@ THEMES: dict[str, dict] = {
         "border": "#f85000",
     },
 }
-DEFAULT_THEME = "zelda"
+DEFAULT_THEME = "kirby"
 
 _active_theme = {"name": DEFAULT_THEME}
 

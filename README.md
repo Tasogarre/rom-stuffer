@@ -51,9 +51,9 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 
 <div align="center">
 
-<img src="assets/screenshot-zelda.png" alt="ROM Stuffer running in the zelda theme" width="80%">
+<img src="assets/screenshot-kirby.png" alt="ROM Stuffer running in the kirby theme" width="80%">
 
-<sub>The interactive UI in the **zelda** theme — pick **metroid** any time with `--theme metroid`. See [Themes](#themes).</sub>
+<sub>The interactive UI in the default **kirby** theme — switch any time with `--theme tetris|zelda|metroid`. See [Themes](#themes).</sub>
 
 </div>
 
@@ -205,38 +205,58 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 | `--level` | `-l` | **(Optional)** DEFLATE compression level 1–9. Default: `6` (Normal). Level 6 is the recommended balance for RetroArch handhelds — do not go higher without testing on your device. |
 | `--resume` | | **(Optional)** Resume a previously interrupted job from its saved progress, skipping the full rescan. See [Resuming an interrupted job](#resuming-an-interrupted-job). |
 | `--fresh` | | **(Optional)** Discard any saved progress in the destination and start a brand-new scan. |
-| `--theme` | | **(Optional)** Visual theme: `zelda` (default) or `metroid`. See [Themes](#themes). |
+| `--theme` | | **(Optional)** Visual theme: `kirby` (default), `tetris`, `zelda`, or `metroid`. See [Themes](#themes). |
 | `--help` | `-h` | Show the help menu and exit. |
 
 ---
 
 ## Themes
 
-The interactive UI ships with two retro 8-bit skins. Launch with no arguments and it asks which you'd like; or pick one up front with `--theme`:
+The interactive UI ships with four retro 8-bit skins, each with an original pixel-art emblem and its own palette. Launch with no arguments and it asks which you'd like; or pick one up front with `--theme`:
 
 ```bash
-python compress_roms.py --theme zelda      # gold Triforce, Link-green (default)
-python compress_roms.py --theme metroid    # Samus orange, bio-cyan Metroid
+python rom_stuffer.py --theme kirby      # pink star (default)
+python rom_stuffer.py --theme tetris     # colour block-stack
+python rom_stuffer.py --theme zelda      # gold triangle emblem
+python rom_stuffer.py --theme metroid    # bio-cyan creature
 ```
 
-Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours.
+Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours. Emblems are original geometric pixel-art, not reproductions of any character.
 
 <table>
 <tr>
 <td width="50%" align="center">
 
-**`zelda`** *(default)*<br>
-<sub>Gold Triforce · Link-green · "It's dangerous to go alone!"</sub>
+**`kirby`** *(default)*<br>
+<sub>Pink pixel star · "Inhale the clutter."</sub>
 
-<img src="assets/screenshot-zelda.png" alt="Zelda theme" width="100%">
+<img src="assets/screenshot-kirby.png" alt="kirby theme" width="100%">
+
+</td>
+<td width="50%" align="center">
+
+**`tetris`**<br>
+<sub>Colour block-stack · "Pack them tight."</sub>
+
+<img src="assets/screenshot-tetris.png" alt="tetris theme" width="100%">
+
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+
+**`zelda`**<br>
+<sub>Gold triangle emblem · Link-green</sub>
+
+<img src="assets/screenshot-zelda.png" alt="zelda theme" width="100%">
 
 </td>
 <td width="50%" align="center">
 
 **`metroid`**<br>
-<sub>Samus orange · bio-cyan Metroid with red nuclei · visor-yellow</sub>
+<sub>Samus-orange · bio-cyan creature</sub>
 
-<img src="assets/screenshot-metroid.png" alt="Metroid theme" width="100%">
+<img src="assets/screenshot-metroid.png" alt="metroid theme" width="100%">
 
 </td>
 </tr>

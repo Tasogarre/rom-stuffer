@@ -291,7 +291,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--theme", choices=sorted(THEMES.keys()), default=None,
-        help="Visual theme: 'zelda' (default) or 'metroid'.",
+        help="Visual theme: kirby (default), tetris, zelda, or metroid.",
     )
 
     args = parser.parse_args()
