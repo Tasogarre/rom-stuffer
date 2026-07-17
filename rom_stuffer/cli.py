@@ -248,7 +248,43 @@ def compress_roms(
     _finalise_session(metrics, dest_path, dry_run)
 
 
-def main() -> None:
+# ---------------------------------------------------------------------------
+# Subcommand parser
+# ---------------------------------------------------------------------------
+
+def _build_parser() -> argparse.ArgumentParser:
+    """Construct and return the ArgumentParser with shared parent + subparsers.
+
+    The shared parent defines -s/--source, -d/--dest, -sd/--sdcard, --dry-run,
+    --theme, --resume, --fresh. The compress subparser adds -t/--type,
+    --no-recursive, -l/--level. The dedup subparser adds --keeper-order,
+    --protect, --per-system, --min-size, --interactive, --hard-delete,
+    --apply-plan.
+    """
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument("-s", "--source", default=None, help="Source directory to scan for ROMs")
+    parent.add_argument("-d", "--dest", default=None, help="Destination/backup directory for original files")
+    parent.add_argument(
+        "-sd", "--sdcard", default=None,
+        help="SD card directory to sync compressed files to (delete-before-copy)",
+    )
+    parent.add_argument(
+        "--dry-run", action="store_true",
+        help="Preview what will happen without modifying any files",
+    )
+    parent.add_argument(
+        "--theme", choices=sorted(THEMES.keys()), default=None,
+        help="Visual theme: " + ", ".join(sorted(THEMES.keys())),
+    )
+    parent.add_argument(
+        "--resume", action="store_true",
+        help="Resume a previously interrupted job from its saved progress",
+    )
+    parent.add_argument(
+        "--fresh", action="store_true",
+        help="Discard any saved progress in the destination and start a brand-new scan",
+    )
+
     parser = argparse.ArgumentParser(
         prog="rom_stuffer.py",
         description="Recursively compress ROM files to .zip and move the originals.",
@@ -257,64 +293,80 @@ def main() -> None:
             "CD-based games should not be zipped."
         ),
     )
-    parser.add_argument("-s", "--source", required=False, help="Source directory to scan for ROMs")
-    parser.add_argument(
-        "-t", "--type", required=False,
-        help="Target a specific file extension and bypass interactive prompts (e.g. .gba)",
+    subparsers = parser.add_subparsers(dest="subcommand", metavar="COMMAND")
+
+    compress_p = subparsers.add_parser(
+        "compress",
+        parents=[parent],
+        help="Compress ROM files into individual .zip archives",
+        description="Compress ROM files to .zip and move originals to the backup destination.",
     )
-    parser.add_argument("-d", "--dest", required=False, help="Destination directory to move original files to")
-    parser.add_argument(
-        "-sd", "--sdcard", required=False,
-        help="SD card directory to sync compressed files to (delete-before-copy; card may be nearly full)",
+    compress_p.add_argument(
+        "-t", "--type", default=None,
+        help="Target a specific file extension, bypassing the interactive prompts (e.g. .gba)",
     )
-    parser.add_argument(
-        "--dry-run", action="store_true",
-        help="Preview what will happen without modifying any files. Sizes in the report are estimates.",
+    compress_p.add_argument(
+        "--no-recursive", action="store_true",
+        help="Disable recursive sub-folder scanning",
     )
-    parser.add_argument(
-        "--no-recursive", action="store_true", help="Disable recursive sub-folder scanning."
-    )
-    parser.add_argument(
+    compress_p.add_argument(
         "-l", "--level", type=int, default=6, choices=range(1, 10), metavar="1-9",
         help=(
             "DEFLATE compression level (1=fastest, 9=smallest). "
             "Default 6 (Normal) is the recommended balance for RetroArch handhelds."
         ),
     )
-    parser.add_argument(
-        "--resume", action="store_true",
-        help="Resume a previously interrupted job from its saved progress, skipping the full rescan.",
+
+    dedup_p = subparsers.add_parser(
+        "dedup",
+        parents=[parent],
+        help="Find and remove duplicate ROM files",
+        description="Detect byte-identical ROM duplicates and generate a removal plan.",
     )
-    parser.add_argument(
-        "--fresh", action="store_true",
-        help="Discard any saved progress in the destination and start a brand-new scan.",
+    dedup_p.add_argument(
+        "--keeper-order", default=None,
+        help=(
+            "Comma-separated folder-name substrings; earlier entries have higher keep priority "
+            "(e.g. 'golden,primary')"
+        ),
     )
-    parser.add_argument(
-        "--theme", choices=sorted(THEMES.keys()), default=None,
-        help="Visual theme: kirby (default), tetris, zelda, or metroid.",
+    dedup_p.add_argument(
+        "--protect", action="append", default=[],
+        help="Folder name (substring) whose files are never removed; may be repeated",
+    )
+    dedup_p.add_argument(
+        "--per-system", action="store_true",
+        help="Only compare files that share the same top-level system folder",
+    )
+    dedup_p.add_argument(
+        "--min-size", type=int, default=0,
+        help="Skip files smaller than N bytes when scanning for duplicates",
+    )
+    dedup_p.add_argument(
+        "--interactive", action="store_true",
+        help="Confirm each duplicate group interactively in the TUI before acting",
+    )
+    dedup_p.add_argument(
+        "--hard-delete", action="store_true",
+        help="Permanently delete duplicates instead of quarantining them to a backup folder",
+    )
+    dedup_p.add_argument(
+        "--apply-plan", default=None,
+        help="Path to a previously saved dedup plan file to apply instead of re-scanning",
     )
 
-    args = parser.parse_args()
+    return parser
 
-    provided_args = [
-        args.source, args.dest, args.type, args.sdcard,
-        args.dry_run, args.no_recursive, args.resume, args.fresh, args.theme,
-    ]
-    interactive_mode = not any(provided_args)
 
-    # Theme: explicit flag wins; otherwise ask in the TUI, else default.
-    if args.theme:
-        apply_theme(args.theme)
-    elif interactive_mode:
-        choice = Prompt.ask(
-            "Choose a theme",
-            choices=sorted(THEMES.keys()),
-            default=DEFAULT_THEME,
-        )
-        apply_theme(choice)
+# ---------------------------------------------------------------------------
+# Subcommand handlers
+# ---------------------------------------------------------------------------
 
-    print_header()
+def _run_compress(args: argparse.Namespace) -> None:
+    """Route parsed args to compress_roms().
 
+    Prompts for source and/or dest if they are absent from args.
+    """
     source = args.source
     if not source:
         source = Prompt.ask("[accent]Source[/accent] directory to scan for ROMs").strip()
@@ -323,30 +375,140 @@ def main() -> None:
     if not dest:
         dest = Prompt.ask("[accent]Destination[/accent] directory for the original files").strip()
 
-    dry_run = args.dry_run
-    if interactive_mode and not dry_run:
-        dry_run = Confirm.ask("Run in [info]dry-run[/info] mode (preview only)?", default=False)
-
-    recursive = not args.no_recursive
-    if interactive_mode and not args.no_recursive:
-        recursive = Confirm.ask("Scan sub-folders [accent]recursively[/accent]?", default=True)
-
-    level = args.level
-    if interactive_mode:
-        while True:
-            level = IntPrompt.ask(
-                "[accent]Compression level[/accent] "
-                "[muted](1 = fastest, 9 = smallest; 6 recommended)[/muted]",
-                default=6,
-            )
-            if 1 <= level <= 9:
-                break
-            console.print("  [warn]Please choose a number from 1 to 9.[/warn]")
+    recursive = not getattr(args, "no_recursive", False)
+    level = getattr(args, "level", 6)
 
     compress_roms(
-        source, args.type, dest, args.sdcard, dry_run, recursive, level,
-        resume=args.resume, fresh=args.fresh,
+        source,
+        getattr(args, "type", None),
+        dest,
+        args.sdcard,
+        args.dry_run,
+        recursive,
+        level,
+        resume=args.resume,
+        fresh=args.fresh,
     )
+
+
+def _run_dedup(args: argparse.Namespace) -> None:
+    """Route parsed args to the dedup flow via a lazy import.
+
+    The dedup engine (rom_stuffer.dedup) may not exist yet; if it is absent,
+    a clear error message is printed and the function returns without raising.
+    """
+    try:
+        from rom_stuffer.dedup import run_dedup  # noqa: PLC0415
+        run_dedup(args)
+    except ImportError:
+        console.print(
+            "[warn]Dedup engine not yet available.[/warn] "
+            "Build or install the rom_stuffer.dedup module to use this feature."
+        )
+
+
+def _run_both(args: argparse.Namespace) -> None:
+    """De-duplicate first, then compress the surviving files."""
+    _run_dedup(args)
+    _run_compress(args)
+
+
+def _interactive_menu() -> None:
+    """Display the themed no-arg menu and route to the chosen handler.
+
+    Prompts the user for a theme, an action (1=Compress, 2=Find duplicates,
+    3=Both), and the required paths, then delegates to the appropriate handler.
+    Ctrl-C prints a goodbye message and exits 0.
+    """
+    try:
+        choice = Prompt.ask(
+            "Choose a theme",
+            choices=sorted(THEMES.keys()),
+            default=DEFAULT_THEME,
+        )
+        apply_theme(choice)
+        print_header()
+
+        console.print("\n[bold]What would you like to do?[/bold]\n")
+        console.print("  [1]  Compress ROMs")
+        console.print("  [2]  Find duplicates")
+        console.print("  [3]  Both  (de-duplicate first, then compress)\n")
+
+        action = IntPrompt.ask("Choose", default=1)
+        while action not in (1, 2, 3):
+            console.print("  [warn]Please choose 1, 2, or 3.[/warn]")
+            action = IntPrompt.ask("Choose", default=1)
+
+        source = Prompt.ask("[accent]Source[/accent] directory").strip()
+        dest = Prompt.ask("[accent]Destination[/accent] directory").strip()
+        dry_run = Confirm.ask("Dry run?", default=False)
+
+        ns = argparse.Namespace(
+            source=source,
+            dest=dest,
+            sdcard=None,
+            dry_run=dry_run,
+            resume=False,
+            fresh=False,
+            # compress-specific defaults
+            type=None,
+            no_recursive=False,
+            level=6,
+            # dedup-specific defaults
+            keeper_order=None,
+            protect=[],
+            per_system=False,
+            min_size=0,
+            interactive=False,
+            hard_delete=False,
+            apply_plan=None,
+        )
+
+        if action == 1:
+            _run_compress(ns)
+        elif action == 2:
+            _run_dedup(ns)
+        else:
+            _run_both(ns)
+
+    except KeyboardInterrupt:
+        console.print("\n[muted]Goodbye.[/muted]")
+        sys.exit(0)
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    """Top-level CLI entry point.
+
+    Routes to the correct handler based on argv:
+    - No arguments: shows the themed interactive menu (_interactive_menu).
+    - 'compress' subcommand: runs the compress flow (_run_compress).
+    - 'dedup' subcommand: runs the dedup flow (_run_dedup).
+    - Unknown / missing subcommand: prints help and exits 1.
+    """
+    if len(sys.argv) == 1:
+        _interactive_menu()
+        return
+
+    args = _build_parser().parse_args()
+
+    if args.theme:
+        apply_theme(args.theme)
+    else:
+        apply_theme(DEFAULT_THEME)
+
+    print_header()
+
+    if args.subcommand == "compress":
+        _run_compress(args)
+    elif args.subcommand == "dedup":
+        _run_dedup(args)
+    else:
+        _build_parser().print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
