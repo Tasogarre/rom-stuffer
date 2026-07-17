@@ -222,6 +222,16 @@ def format_size(size_bytes: int) -> str:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
 
 
+def describe_error(e: Exception) -> str:
+    """Human-readable error text. An OSError's str() embeds repr(filename), which
+    doubles backslashes on Windows paths (C:\\\\Games); use the raw strerror and
+    filename (single backslash) instead."""
+    if isinstance(e, OSError):
+        msg = e.strerror or e.__class__.__name__
+        return f"{msg}: {e.filename}" if e.filename else msg
+    return str(e)
+
+
 # --------------------------------------------------------------------------- #
 # Disc-image / BIOS guard.
 #
@@ -551,7 +561,7 @@ def compress_batch(
 
             except Exception as e:
                 metrics.error_count += 1
-                metrics.errors.append({'file': str(file_path.name), 'error': str(e)})
+                metrics.errors.append({'file': str(file_path.name), 'error': describe_error(e)})
 
             finally:
                 # Live running space-saved readout so progress is visible on long runs,
@@ -671,7 +681,7 @@ def generate_reports(metrics: SessionMetrics, dest_dir: str | Path) -> None:
                     f.write(f"{err['file']}: {err['error']}\n")
         console.print(f"[bold green]Report saved to: {log_path}[/bold green]")
     except Exception as e:
-        console.print(f"[bold red]Failed to write log file: {e}[/bold red]")
+        console.print(f"[bold red]Failed to write log file: {describe_error(e)}[/bold red]")
 
 
 def _finalise_session(
@@ -734,7 +744,7 @@ def _build_worklist_interactive(
                 else:
                     metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unsupported extension: {p.suffix}"})
         except OSError as e:
-            metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
+            metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable: {describe_error(e)}"})
 
     disc_excluded = [s for s in metrics.skipped_files if 'disc' in s['reason'] or 'BIOS' in s['reason']]
     if disc_excluded:
@@ -947,7 +957,7 @@ def compress_roms(
                     else:
                         files_to_process.append(p)
             except OSError as e:
-                metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable (OS Error): {e}"})
+                metrics.skipped_files.append({'file': str(p.name), 'reason': f"Unreadable: {describe_error(e)}"})
         if not files_to_process:
             console.print("[yellow]No files found matching the specified type.[/yellow]")
             return
