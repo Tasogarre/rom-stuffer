@@ -51,9 +51,9 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 
 <div align="center">
 
-<img src="assets/screenshot-kirby.png" alt="ROM Stuffer running in the kirby theme" width="80%">
+<img src="assets/screenshot-tetris.png" alt="ROM Stuffer running in the tetris theme" width="80%">
 
-<sub>The interactive UI in the default **kirby** theme — switch any time with `--theme tetris|zelda|metroid`. See [Themes](#themes).</sub>
+<sub>The interactive UI in the default **tetris** theme — switch any time with `--theme kirby|zelda|metroid`. See [Themes](#themes).</sub>
 
 </div>
 
@@ -205,7 +205,7 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 | `--level` | `-l` | **(Optional)** DEFLATE compression level 1–9. Default: `6` (Normal). Level 6 is the recommended balance for RetroArch handhelds — do not go higher without testing on your device. |
 | `--resume` | | **(Optional)** Resume a previously interrupted job from its saved progress, skipping the full rescan. See [Resuming an interrupted job](#resuming-an-interrupted-job). |
 | `--fresh` | | **(Optional)** Discard any saved progress in the destination and start a brand-new scan. |
-| `--theme` | | **(Optional)** Visual theme: `kirby` (default), `tetris`, `zelda`, or `metroid`. See [Themes](#themes). |
+| `--theme` | | **(Optional)** Visual theme: `tetris` (default), `kirby`, `zelda`, or `metroid`. See [Themes](#themes). |
 | `--help` | `-h` | Show the help menu and exit. |
 
 ---
@@ -215,8 +215,8 @@ python compress_roms.py --source "<source_directory>" --dest "<backup_directory>
 The interactive UI ships with four retro 8-bit skins, each with an original pixel-art emblem and its own palette. Launch with no arguments and it asks which you'd like; or pick one up front with `--theme`:
 
 ```bash
-python rom_stuffer.py --theme kirby      # pink star (default)
-python rom_stuffer.py --theme tetris     # colour block-stack
+python rom_stuffer.py --theme tetris     # tetromino board (default)
+python rom_stuffer.py --theme kirby      # pink star
 python rom_stuffer.py --theme zelda      # gold triangle emblem
 python rom_stuffer.py --theme metroid    # bio-cyan creature
 ```
@@ -229,18 +229,18 @@ Each theme re-skins the entire interface — banner, panels, section rules, prog
 <tr>
 <td width="50%" align="center">
 
-**`kirby`** *(default)*<br>
-<sub>Pink pixel star · "Inhale the clutter."</sub>
+**`tetris`** *(default)*<br>
+<sub>Tetromino board · "Pack them tight."</sub>
 
-<img src="assets/screenshot-kirby.png" alt="kirby theme" width="100%">
+<img src="assets/screenshot-tetris.png" alt="tetris theme" width="100%">
 
 </td>
 <td width="50%" align="center">
 
-**`tetris`**<br>
-<sub>Colour block-stack · "Pack them tight."</sub>
+**`kirby`**<br>
+<sub>Pink pixel star · "Inhale the clutter."</sub>
 
-<img src="assets/screenshot-tetris.png" alt="tetris theme" width="100%">
+<img src="assets/screenshot-kirby.png" alt="kirby theme" width="100%">
 
 </td>
 </tr>

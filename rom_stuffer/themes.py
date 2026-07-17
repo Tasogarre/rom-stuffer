@@ -145,7 +145,7 @@ THEMES: dict[str, dict] = {
         "border": "#f85000",
     },
 }
-DEFAULT_THEME = "kirby"
+DEFAULT_THEME = "tetris"
 
 _active_theme = {"name": DEFAULT_THEME}
 
