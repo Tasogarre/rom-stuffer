@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# "." makes `import compress_roms` work; "tests" makes `from crash_sim import ...` work
+pythonpath = [".", "tests"]
+addopts = "-v --tb=short"
