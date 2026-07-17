@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Callable
 
 from rom_stuffer.guards import SUPPORTED_EXTENSIONS, describe_error, exclusion_reason
+from rom_stuffer.logs import get_logger
 from rom_stuffer.hashing import content_sha256, logical_size, quick_fingerprint
 from rom_stuffer.metrics import format_size
 
@@ -477,6 +478,7 @@ def apply_plan(
                     metrics.errors.append(
                         {"file": str(removal.name), "error": describe_error(e)}
                     )
+                    get_logger("dedup").warning("failed to remove %s: %s", removal, describe_error(e))
     finally:
         try:
             os.fsync(fh.fileno())

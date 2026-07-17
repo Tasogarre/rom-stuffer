@@ -18,6 +18,7 @@ from rom_stuffer.state import (
 from rom_stuffer.scan import _build_worklist_interactive
 from rom_stuffer.compress import compress_batch
 from rom_stuffer.report import generate_reports
+from rom_stuffer.logs import setup_logging, get_logger
 
 
 def _finalise_session(
@@ -284,6 +285,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--fresh", action="store_true",
         help="Discard any saved progress in the destination and start a brand-new scan",
     )
+    parent.add_argument(
+        "--verbose", action="store_true",
+        help="Verbose logging (also echoes the rotating log to the console)",
+    )
+    parent.add_argument(
+        "--log-dir", default=None,
+        help="Directory for the rotating log file (default: ~/.rom_stuffer/logs)",
+    )
 
     parser = argparse.ArgumentParser(
         prog="rom_stuffer.py",
@@ -353,6 +362,21 @@ def _build_parser() -> argparse.ArgumentParser:
     dedup_p.add_argument(
         "--apply-plan", default=None,
         help="Path to a previously saved dedup plan file to apply instead of re-scanning",
+    )
+
+    estimate_p = subparsers.add_parser(
+        "estimate",
+        parents=[parent],
+        help="Estimate SD-card space per system (compressed + de-duplicated)",
+        description="Report per-system and total space: decompressed vs compressed size and dedup savings.",
+    )
+    estimate_p.add_argument(
+        "--no-recursive", action="store_true",
+        help="Scan only the top-level source folder",
+    )
+    estimate_p.add_argument(
+        "--per-system", action="store_true", default=True,
+        help="Group the estimate by system folder (default)",
     )
 
     return parser
@@ -489,11 +513,20 @@ def main() -> None:
     - 'dedup' subcommand: runs the dedup flow (_run_dedup).
     - Unknown / missing subcommand: prints help and exits 1.
     """
+    setup_logging()  # baseline config so the no-arg menu path also logs
+
     if len(sys.argv) == 1:
         _interactive_menu()
         return
 
     args = _build_parser().parse_args()
+
+    # Reconfigure the rotating log with the user's preferences before any operation.
+    from pathlib import Path as _Path
+    log_dir = _Path(args.log_dir) if getattr(args, "log_dir", None) else None
+    log_file = setup_logging(log_dir=log_dir, verbose=getattr(args, "verbose", False))
+    _log = get_logger("cli")
+    _log.info("start subcommand=%s source=%s dest=%s", args.subcommand, args.source, args.dest)
 
     if args.theme:
         apply_theme(args.theme)
@@ -502,13 +535,32 @@ def main() -> None:
 
     print_header()
 
-    if args.subcommand == "compress":
-        _run_compress(args)
-    elif args.subcommand == "dedup":
-        _run_dedup(args)
-    else:
-        _build_parser().print_help()
-        sys.exit(1)
+    try:
+        if args.subcommand == "compress":
+            _run_compress(args)
+        elif args.subcommand == "dedup":
+            _run_dedup(args)
+        elif args.subcommand == "estimate":
+            _run_estimate(args)
+        else:
+            _build_parser().print_help()
+            sys.exit(1)
+    except SystemExit:
+        raise
+    except Exception:
+        _log.exception("unhandled error in %s", args.subcommand)
+        raise
+    finally:
+        _log.info("done subcommand=%s (log: %s)", args.subcommand, log_file)
+
+
+def _run_estimate(args: argparse.Namespace) -> None:
+    """Route parsed args to the space-saving estimator."""
+    from rom_stuffer.estimate import run_estimate
+    if not args.source:
+        args.source = Prompt.ask("[accent]Source[/accent] directory to estimate").strip()
+    get_logger("estimate").info("estimating source=%s", args.source)
+    run_estimate(args)
 
 
 if __name__ == "__main__":

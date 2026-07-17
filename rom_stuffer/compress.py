@@ -15,6 +15,7 @@ from rom_stuffer.metrics import (
     FAST_COPY_BUFFER_BYTES, DRY_RUN_COMPRESSION_ESTIMATE,
 )
 from rom_stuffer.guards import describe_error
+from rom_stuffer.logs import get_logger
 from rom_stuffer.state import ResumeState
 
 
@@ -162,6 +163,7 @@ def compress_batch(
             except Exception as e:
                 metrics.error_count += 1
                 metrics.errors.append({'file': str(file_path.name), 'error': describe_error(e)})
+                get_logger("compress").warning("failed %s: %s", file_path, describe_error(e))
 
             finally:
                 # Live running space-saved readout so progress is visible on long runs,
