@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from rich.theme import Theme
 
 from rom_stuffer.tui import console
@@ -9,7 +11,27 @@ from rom_stuffer.tui import console
 # TUI reads as one design) plus a pixel-art emblem and title drawn in that
 # palette. Styles are referenced everywhere by semantic name (brand/accent/...),
 # so switching the theme re-skins the entire interface.
+#
+# Emblem art may be OVERRIDDEN per theme by dropping a Rich-markup block-art file
+# at assets/emblems/<theme>.txt (see docs/THEME_ART.md). When present it is used
+# instead of the built-in fallback below — so you can supply your own pixel art
+# without editing code. This is how user-provided emblems are wired in.
 # --------------------------------------------------------------------------- #
+
+_EMBLEM_DIR = Path(__file__).resolve().parent.parent / "assets" / "emblems"
+
+
+def _load_emblem(name: str, fallback: str) -> str:
+    """Return assets/emblems/<name>.txt if it exists, else the built-in fallback."""
+    try:
+        override = _EMBLEM_DIR / f"{name}.txt"
+        if override.is_file():
+            text = override.read_text(encoding="utf-8").rstrip("\n")
+            if text:
+                return text
+    except OSError:
+        pass
+    return fallback
 
 # "zelda" theme emblem — a gold Triforce (half-block pixel art). Three solid
 # triangles; the empty middle is an inverted triangle tapering to a point at the
@@ -66,7 +88,7 @@ THEMES: dict[str, dict] = {
             "value": "bold #ffd93d",
             "path": "#7fd0f8",
         },
-        "art": KIRBY_ART,
+        "art": _load_emblem("kirby", KIRBY_ART),
         "label": "kirby theme",
         "tagline": "Inhale the clutter.  Stuff your cartridges in.",
         "border": "#f884b8",
@@ -83,7 +105,7 @@ THEMES: dict[str, dict] = {
             "value": "bold #ffca28",
             "path": "#29b6f6",
         },
-        "art": TETRIS_ART,
+        "art": _load_emblem("tetris", TETRIS_ART),
         "label": "tetris theme",
         "tagline": "Pack them tight.  No wasted space.",
         "border": "#b388ff",
@@ -100,7 +122,7 @@ THEMES: dict[str, dict] = {
             "value": "bold #f8c000",
             "path": "#80d010",
         },
-        "art": ZELDA_ART,
+        "art": _load_emblem("zelda", ZELDA_ART),
         "label": "zelda theme",
         "tagline": "It's dangerous to go alone!  Compress your cartridges first.",
         "border": "#f8c000",
@@ -117,7 +139,7 @@ THEMES: dict[str, dict] = {
             "value": "bold #f8d000",
             "path": "#38c0f8",
         },
-        "art": METROID_ART,
+        "art": _load_emblem("metroid", METROID_ART),
         "label": "metroid theme",
         "tagline": "The last cartridge is in captivity.  The galaxy is at peace.",
         "border": "#f85000",

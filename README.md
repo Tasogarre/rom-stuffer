@@ -223,6 +223,8 @@ python rom_stuffer.py --theme metroid    # bio-cyan creature
 
 Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours. Emblems are original geometric pixel-art, not reproductions of any character.
 
+**Want your own emblem art?** Drop a pixel image you have the rights to and it becomes the emblem — no code changes. See [Supplying your own theme art](docs/THEME_ART.md).
+
 <table>
 <tr>
 <td width="50%" align="center">
