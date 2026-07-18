@@ -135,6 +135,9 @@ def _format_dedup_summary_panel(plan: "DedupPlan", metrics: "DedupMetrics") -> P
     grid.add_row("Duplicate groups", str(metrics.groups_found))
     grid.add_row("Files removed", str(metrics.files_removed))
     grid.add_row("Space reclaimed", format_size(metrics.bytes_reclaimed))
+    if metrics.sd_files_pruned > 0:
+        grid.add_row("SD files pruned", str(metrics.sd_files_pruned))
+        grid.add_row("SD data freed", format_size(metrics.sd_bytes_pruned))
     if metrics.errors:
         grid.add_row("Errors", f"[danger]{len(metrics.errors)}[/danger]")
 
@@ -225,6 +228,9 @@ def generate_dedup_report(
             f.write(f"Duplicate Groups: {metrics.groups_found}\n")
             f.write(f"Files Removed: {metrics.files_removed}\n")
             f.write(f"Space Reclaimed: {format_size(metrics.bytes_reclaimed)}\n")
+            if metrics.sd_files_pruned > 0:
+                f.write(f"SD Files Pruned: {metrics.sd_files_pruned}\n")
+                f.write(f"SD Data Freed: {format_size(metrics.sd_bytes_pruned)}\n")
             f.write("\nKept vs removed:\n")
             any_row = False
             for group in plan.groups:
