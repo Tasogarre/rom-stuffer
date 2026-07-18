@@ -42,10 +42,10 @@ a new capability.
 ### 3.1 Package layout
 
 `compress_roms.py` (~1,000 lines) is split into a small package. The entry point is
-renamed to `rom_stuffer.py`; `compress_roms.py` remains as a thin deprecation shim.
+renamed to `rom-stuffer.py`; `compress_roms.py` remains as a thin deprecation shim.
 
 ```
-rom_stuffer.py            # entry point: delegates to rom_stuffer.cli:main
+rom-stuffer.py            # entry point: delegates to rom_stuffer.cli:main
 compress_roms.py          # deprecation shim: prints a notice, forwards to the CLI
 rom_stuffer/
   __init__.py
@@ -74,9 +74,9 @@ Subcommands for headless use, an interactive menu when launched with no argument
 (the TUI is the primary interface).
 
 ```
-python rom_stuffer.py compress -s ... -d ...        # today's behaviour
-python rom_stuffer.py dedup    -s ... -d ...
-python rom_stuffer.py                               # → menu:
+python rom-stuffer.py compress -s ... -d ...        # today's behaviour
+python rom-stuffer.py dedup    -s ... -d ...
+python rom-stuffer.py                               # → menu:
     What would you like to do?
       [1] Compress
       [2] Find duplicates

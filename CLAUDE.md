@@ -2,9 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Documented knowledge
+
+- `docs/solutions/` - solutions to past problems (bugs, best practices), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+- `CONCEPTS.md` - shared domain vocabulary (themes, emblems, palette, etc.). Relevant when orienting to the codebase or discussing domain concepts.
+
 ## What this project is
 
-`rom_stuffer` is a single-file Python CLI (`compress_roms.py`) that compresses retro gaming ROM files into individual `.zip` archives for use on RetroArch-based handhelds (R36S, Miyoo Mini, etc.). It also moves originals to a backup directory while preserving folder structure, and optionally fast-syncs the new zips to a mounted SD card.
+`rom-stuffer` is a single-file Python CLI (`compress_roms.py`) that compresses retro gaming ROM files into individual `.zip` archives for use on RetroArch-based handhelds (R36S, Miyoo Mini, etc.). It also moves originals to a backup directory while preserving folder structure, and optionally fast-syncs the new zips to a mounted SD card.
 
 ## Running the script
 

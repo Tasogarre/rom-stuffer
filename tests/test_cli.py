@@ -39,9 +39,9 @@ REPO_ROOT = Path(__file__).parent.parent
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess:
-    """Run rom_stuffer.py as a subprocess from the repo root."""
+    """Run rom-stuffer.py as a subprocess from the repo root."""
     return subprocess.run(
-        [sys.executable, "rom_stuffer.py", *args],
+        [sys.executable, "rom-stuffer.py", *args],
         capture_output=True,
         text=True,
         cwd=str(REPO_ROOT),
@@ -112,7 +112,7 @@ class TestMainCompressRouting:
     """T2.1 — compress subcommand routes correctly."""
 
     def test_compress_calls_run_compress(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py", "compress", "-s", "/tmp/src", "-d", "/tmp/dst"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py", "compress", "-s", "/tmp/src", "-d", "/tmp/dst"])
         with (
             patch.object(cli_mod, "_run_compress") as mock_compress,
             patch.object(cli_mod, "_run_dedup") as mock_dedup,
@@ -124,7 +124,7 @@ class TestMainCompressRouting:
         mock_dedup.assert_not_called()
 
     def test_compress_passes_correct_subcommand(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py", "compress", "-s", "/tmp/src", "-d", "/tmp/dst"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py", "compress", "-s", "/tmp/src", "-d", "/tmp/dst"])
         captured = {}
 
         def capture(args):
@@ -150,7 +150,7 @@ class TestMainDedupRouting:
     """T2.2 — dedup subcommand routes to _run_dedup stub without raising."""
 
     def test_dedup_calls_run_dedup(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py", "dedup", "-s", "/tmp/src", "-d", "/tmp/dst"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py", "dedup", "-s", "/tmp/src", "-d", "/tmp/dst"])
         with (
             patch.object(cli_mod, "_run_dedup") as mock_dedup,
             patch.object(cli_mod, "_run_compress") as mock_compress,
@@ -163,7 +163,7 @@ class TestMainDedupRouting:
 
     def test_dedup_no_exception_with_importerror(self, monkeypatch):
         """_run_dedup must not raise even when rom_stuffer.dedup is absent."""
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py", "dedup", "-s", "/tmp/src", "-d", "/tmp/dst"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py", "dedup", "-s", "/tmp/src", "-d", "/tmp/dst"])
         monkeypatch.setitem(sys.modules, "rom_stuffer.dedup", None)
         with (
             patch.object(cli_mod, "print_header"),
@@ -239,14 +239,14 @@ class TestInteractiveMenu:
         return prompt_side_effect, int_prompt_side_effect, confirm_side_effect, src, dst
 
     def test_no_arg_calls_interactive_menu(self, monkeypatch):
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
         with patch.object(cli_mod, "_interactive_menu") as mock_menu:
             main()
         mock_menu.assert_called_once()
 
     def test_menu_choice_1_routes_to_compress(self, tmp_path, monkeypatch):
         """Menu choice 1 = Compress: compress_roms should be called."""
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
         prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=1, dry_run=True)
 
         with (
@@ -273,7 +273,7 @@ class TestInteractiveMenu:
 
     def test_menu_choice_2_routes_to_dedup(self, tmp_path, monkeypatch):
         """Menu choice 2 = Find duplicates: _run_dedup should be called."""
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
         prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=2)
 
         with (
@@ -293,7 +293,7 @@ class TestInteractiveMenu:
 
     def test_menu_choice_3_routes_to_both(self, tmp_path, monkeypatch):
         """Menu choice 3 = Both: _run_both should be called (dedup then compress)."""
-        monkeypatch.setattr(sys, "argv", ["rom_stuffer.py"])
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
         prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=3)
 
         with (
@@ -371,7 +371,7 @@ class TestCompressEndToEnd:
 
         monkeypatch.setattr(
             sys, "argv",
-            ["rom_stuffer.py", "compress", "-s", str(src), "-d", str(dst),
+            ["rom-stuffer.py", "compress", "-s", str(src), "-d", str(dst),
              "-t", ".gba", "--dry-run"],
         )
         with (
@@ -393,7 +393,7 @@ class TestCompressEndToEnd:
 
         monkeypatch.setattr(
             sys, "argv",
-            ["rom_stuffer.py", "compress", "-s", str(src), "-d", str(dst), "-t", ".gba"],
+            ["rom-stuffer.py", "compress", "-s", str(src), "-d", str(dst), "-t", ".gba"],
         )
         with (
             patch.object(cli_mod, "print_header"),

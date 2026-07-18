@@ -17,7 +17,7 @@ The emblem is terminal block-art. To use your own:
    This writes `assets/emblems/kirby.txt`.
 3. Launch that theme — the emblem is loaded automatically:
    ```bash
-   python rom_stuffer.py --theme kirby
+   python rom-stuffer.py --theme kirby
    ```
 
 The converter maps two pixel rows per character (half-blocks) so the art stays

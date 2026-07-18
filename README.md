@@ -15,7 +15,7 @@
 
 <div align="center"><img src="assets/divider.png" alt="tetromino divider" width="60%"></div>
 
-`rom_stuffer` is a command-line Python utility for fitting the **most games onto an SD card** for retro handhelds. It has three capabilities, all sharing the same safety guards, themed TUI, and reporting:
+`rom-stuffer` is a command-line Python utility for fitting the **most games onto an SD card** for retro handhelds. It has three capabilities, all sharing the same safety guards, themed TUI, and reporting:
 
 - **`compress`** — pack each ROM into its own highly-compatible `.zip`, moving the originals to a backup while preserving your folder structure.
 - **`dedup`** — find byte-identical duplicate ROMs and quarantine the extras (reversible by default).
@@ -42,9 +42,9 @@ This script is designed **exclusively** for cartridge-based systems, such as:
 ## Why Use This?
 
 1. **Saves SD Card Space:** Compresses your ROMs using standard DEFLATE compression.
-2. **Optimised for Emulators:** Emulators hate "solid" archives or ZIPs with multiple games in them. `rom_stuffer` ensures every single ROM gets its own individual `.zip` file, which is exactly what RetroArch expects.
+2. **Optimised for Emulators:** Emulators hate "solid" archives or ZIPs with multiple games in them. `rom-stuffer` ensures every single ROM gets its own individual `.zip` file, which is exactly what RetroArch expects.
 3. **Fast Decompression:** Uses "Normal" compression level (6) rather than "Ultra." This ensures that lower-powered handhelds can decompress the game on-the-fly without stuttering.
-4. **Organised Backups:** Moving your uncompressed files into a single dump folder is messy. `rom_stuffer` recreates your exact subdirectory structure in the backup folder automatically.
+4. **Organised Backups:** Moving your uncompressed files into a single dump folder is messy. `rom-stuffer` recreates your exact subdirectory structure in the backup folder automatically.
 5. **SD Card Fast-Sync:** Built-in sequential 4 MB-buffered bulk I/O allows you to reconcile newly compressed files directly to your SD card. It auto-deletes the old uncompressed files, writes the new zip, and fsyncs to confirm the data is durable.
 6. **De-duplication:** Finds byte-identical copies of the same ROM (even a raw file vs. a zipped one) and reclaims the wasted space — quarantining the extras to a reversible backup by default. See [De-duplication](#de-duplication).
 7. **Space estimates:** Before you commit, see per-system and total figures for what a library will occupy once compressed and de-duplicated. See [Estimating space](#estimating-space).
@@ -86,26 +86,26 @@ cd rom-stuffer
 pip install -r requirements.txt
 
 # 3. See how much space you'd save (read-only, nothing is touched)
-python rom_stuffer.py estimate --source "/path/to/your/roms"
+python rom-stuffer.py estimate --source "/path/to/your/roms"
 
 # 4. Preview the compression (no files are modified)
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   --source "/path/to/your/roms" \
   --dest "/path/to/your/backup" \
   --dry-run
 
 # 5. Run for real (interactive — asks about each extension it finds)
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   --source "/path/to/your/roms" \
   --dest "/path/to/your/backup"
 
 # 6. Reclaim space from byte-identical duplicates (quarantined, reversible)
-python rom_stuffer.py dedup \
+python rom-stuffer.py dedup \
   --source "/path/to/your/roms" \
   --dest "/path/to/your/backup"
 ```
 
-Run `python rom_stuffer.py` with no arguments for an interactive menu that walks you
+Run `python rom-stuffer.py` with no arguments for an interactive menu that walks you
 through picking a command.
 
 ### The three commands
@@ -117,7 +117,7 @@ through picking a command.
 | [`estimate`](#estimating-space) | Report per-system and total space the library will need. |
 
 > **Windows users:** Use `python` or `py` instead of `python3`, and wrap paths in double quotes:
-> `python rom_stuffer.py compress --source "E:\ROMS" --dest "D:\RetroBackups"`
+> `python rom-stuffer.py compress --source "E:\ROMS" --dest "D:\RetroBackups"`
 
 ---
 
@@ -153,7 +153,7 @@ Note the drive letter assigned to the SD card (e.g. F:\)
 
 ### Step 2 — Understand the folder structure
 
-`rom_stuffer` preserves your relative directory tree. If your PC ROMs are at:
+`rom-stuffer` preserves your relative directory tree. If your PC ROMs are at:
 ```
 C:\MyROMs\gba\Mario.gba
 C:\MyROMs\snes\Zelda.sfc
@@ -172,19 +172,19 @@ The SD card's old `F:\gba\Mario.gba` is deleted **before** the new zip is writte
 
 ```bash
 # macOS example
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   --source "/Users/marcus/ROMs" \
   --dest "/Users/marcus/ROMs_backup" \
   --sdcard "/Volumes/SDCARD"
 
 # Windows example
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   --source "C:\MyROMs" \
   --dest "D:\Backups" \
   --sdcard "F:\"
 
 # Linux example
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   --source "/home/marcus/roms" \
   --dest "/home/marcus/roms_backup" \
   --sdcard "/media/marcus/SDCARD"
@@ -198,12 +198,12 @@ python rom_stuffer.py compress \
 
 ## Usage
 
-`rom_stuffer` has three subcommands — `compress`, `dedup`, and `estimate`. Launch it
+`rom-stuffer` has three subcommands — `compress`, `dedup`, and `estimate`. Launch it
 with **no arguments** for an interactive menu that walks you through choosing one and
 filling in every option, so there are no flags to remember:
 
 ```bash
-python rom_stuffer.py
+python rom-stuffer.py
 ```
 
 Or name a subcommand directly. This section covers `compress`; see
@@ -222,10 +222,10 @@ asked interactively.
 
 ```bash
 # Pass what you know and be prompted for the rest
-python rom_stuffer.py compress --source "<source_directory>" --dest "<backup_directory>"
+python rom-stuffer.py compress --source "<source_directory>" --dest "<backup_directory>"
 
 # Or target a single extension headlessly (no prompts)
-python rom_stuffer.py compress -s "<source>" -d "<backup>" --type .gba
+python rom-stuffer.py compress -s "<source>" -d "<backup>" --type .gba
 ```
 
 | Argument | Short | Description |
@@ -259,7 +259,7 @@ itself. `dedup` finds these and reclaims the wasted space.
 
 <div align="center">
 
-<img src="assets/screenshot-dedup.png" alt="rom_stuffer dedup: duplicate groups, keeper selection, and a dry-run summary in the tetris theme" width="90%">
+<img src="assets/screenshot-dedup.png" alt="rom-stuffer dedup: duplicate groups, keeper selection, and a dry-run summary in the tetris theme" width="90%">
 
 </div>
 
@@ -302,13 +302,13 @@ vs. removed and bytes reclaimed is written to the backup directory.
 
 ```bash
 # Preview what dedup would reclaim, touching nothing
-python rom_stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup" --dry-run
+python rom-stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup" --dry-run
 
 # Reclaim space, quarantining removals into the backup (reversible)
-python rom_stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup"
+python rom-stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup"
 
 # Only match within a system, ignore files under 64 KB, protect your curated folder
-python rom_stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup" \
+python rom-stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup" \
   --per-system --min-size 64k --protect "**/Favorites/**"
 ```
 
@@ -323,16 +323,16 @@ completely **read-only** — it only measures.
 
 <div align="center">
 
-<img src="assets/screenshot-estimate.png" alt="rom_stuffer estimate: a per-system table of decompressed, compressed, and reclaimable bytes with a total footprint in the tetris theme" width="90%">
+<img src="assets/screenshot-estimate.png" alt="rom-stuffer estimate: a per-system table of decompressed, compressed, and reclaimable bytes with a total footprint in the tetris theme" width="90%">
 
 </div>
 
 ```bash
 # Whole library, per-system breakdown + total
-python rom_stuffer.py estimate --source "/path/to/roms"
+python rom-stuffer.py estimate --source "/path/to/roms"
 
 # Just the top-level totals, don't descend into sub-folders
-python rom_stuffer.py estimate -s "/path/to/roms" --no-recursive
+python rom-stuffer.py estimate -s "/path/to/roms" --no-recursive
 ```
 
 | Argument | Description |
@@ -364,10 +364,10 @@ long overnight run leaves a trail you can inspect afterwards.
 The interactive UI ships with four retro 8-bit skins, each with an original pixel-art emblem and its own palette. Launch with no arguments and it asks which you'd like; or pick one up front with `--theme`:
 
 ```bash
-python rom_stuffer.py --theme tetris     # tetromino board (default)
-python rom_stuffer.py --theme kirby      # pink star
-python rom_stuffer.py --theme zelda      # gold triangle emblem
-python rom_stuffer.py --theme metroid    # bio-cyan creature
+python rom-stuffer.py --theme tetris     # tetromino board (default)
+python rom-stuffer.py --theme kirby      # pink star
+python rom-stuffer.py --theme zelda      # gold triangle emblem
+python rom-stuffer.py --theme metroid    # bio-cyan creature
 ```
 
 Each theme re-skins the entire interface — banner, panels, section rules, progress bars, and summary colours. Emblems are original geometric pixel-art, not reproductions of any character.
@@ -417,7 +417,7 @@ Each theme re-skins the entire interface — banner, panels, section rules, prog
 
 ## Resuming an interrupted job
 
-For large collections (tens of thousands of files), a run can be interrupted — a full SD card, an unplugged drive, a `Ctrl-C`, or a crash. **rom_stuffer checkpoints its progress so it can pick up where it left off without rescanning your entire library.**
+For large collections (tens of thousands of files), a run can be interrupted — a full SD card, an unplugged drive, a `Ctrl-C`, or a crash. **rom-stuffer checkpoints its progress so it can pick up where it left off without rescanning your entire library.**
 
 ### How it works
 
@@ -447,10 +447,10 @@ Pass `--resume` to skip the prompt, or `--fresh` to ignore the saved progress an
 
 ```bash
 # Continue the interrupted job
-python rom_stuffer.py compress -s "/Volumes/ROMS" -d "/backup" -sd "/Volumes/SDCARD" --resume
+python rom-stuffer.py compress -s "/Volumes/ROMS" -d "/backup" -sd "/Volumes/SDCARD" --resume
 
 # Or throw away the saved progress and rescan from scratch
-python rom_stuffer.py compress -s "/Volumes/ROMS" -d "/backup" --fresh
+python rom-stuffer.py compress -s "/Volumes/ROMS" -d "/backup" --fresh
 ```
 
 ### Good to know
@@ -476,7 +476,7 @@ The built-in library recognises the following cartridge ROM extensions automatic
 - **Other:** `.ws`, `.wsc`, `.ngp`, `.ngc`, `.col`, `.int`, `.vec`, `.chf`, `.o2`
 
 > [!IMPORTANT]
-> **`.bin` is handled with care.** The `.bin` extension is used both by Sega Genesis / Atari 2600 **cartridge** dumps (safe to compress) *and* by CD/GD-ROM **disc images** (PS1, Saturn, Sega CD, **Dreamcast**, PC Engine CD) and **BIOS** files (never safe). rom_stuffer automatically **refuses** a `.bin` when it looks like a disc image or BIOS — if it sits in a disc-system or `bios` folder, has a companion `.cue`/`.gdi` descriptor, or is larger than a cartridge could be (>16 MB) — and lists the reason in the report. Genuine cartridge `.bin` dumps are still compressed normally.
+> **`.bin` is handled with care.** The `.bin` extension is used both by Sega Genesis / Atari 2600 **cartridge** dumps (safe to compress) *and* by CD/GD-ROM **disc images** (PS1, Saturn, Sega CD, **Dreamcast**, PC Engine CD) and **BIOS** files (never safe). rom-stuffer automatically **refuses** a `.bin` when it looks like a disc image or BIOS — if it sits in a disc-system or `bios` folder, has a companion `.cue`/`.gdi` descriptor, or is larger than a cartridge could be (>16 MB) — and lists the reason in the report. Genuine cartridge `.bin` dumps are still compressed normally.
 
 > [!NOTE]
 > **CD-Based Systems Exclusion:** Disc images (PS1, Sega CD, Saturn, Dreamcast) are completely excluded. Emulators must seek and stream large tracks directly from the file, and `.zip` extraction overhead will cause severe stuttering. Use `.chd` format instead.
@@ -496,7 +496,7 @@ The built-in library recognises the following cartridge ROM extensions automatic
 Scanning your entire ROMs folder and backing up originals to an external drive:
 
 ```bash
-python rom_stuffer.py compress --source "E:\ROMS" --dest "D:\RetroBackups\Uncompressed"
+python rom-stuffer.py compress --source "E:\ROMS" --dest "D:\RetroBackups\Uncompressed"
 ```
 
 The script will find `.gba` games, list the folders they are in, ask if you want to compress them, then move on to `.nes`, `.sfc`, etc.
@@ -506,7 +506,7 @@ The script will find `.gba` games, list the folders they are in, ask if you want
 Bypass the interactive prompts and compress only a specific format (e.g. SNES):
 
 ```bash
-python rom_stuffer.py compress -s "E:\ROMS\snes" -t ".sfc" -d "D:\Backups\snes_raw"
+python rom-stuffer.py compress -s "E:\ROMS\snes" -t ".sfc" -d "D:\Backups\snes_raw"
 ```
 
 **Result:**
@@ -518,7 +518,7 @@ python rom_stuffer.py compress -s "E:\ROMS\snes" -t ".sfc" -d "D:\Backups\snes_r
 Compress your local PC ROMs, back up the originals locally, and push the new `.zip` files directly to your inserted SD card:
 
 ```bash
-python rom_stuffer.py compress -s "C:\MyROMs" -d "D:\RetroBackups" -sd "F:\"
+python rom-stuffer.py compress -s "C:\MyROMs" -d "D:\RetroBackups" -sd "F:\"
 ```
 
 The script will:
@@ -533,7 +533,7 @@ The script will:
 Always preview before running on a large collection:
 
 ```bash
-python rom_stuffer.py compress \
+python rom-stuffer.py compress \
   -s "/Volumes/SDCARD/roms" \
   -d "/Users/marcus/roms_backup" \
   --dry-run
@@ -546,7 +546,7 @@ No files are touched. The report shows estimated space savings and which folders
 See the per-system and total footprint before compressing or de-duplicating anything:
 
 ```bash
-python rom_stuffer.py estimate --source "/Volumes/ROMS"
+python rom-stuffer.py estimate --source "/Volumes/ROMS"
 ```
 
 Read-only. Reports decompressed size, estimated compressed size, and how much
@@ -558,7 +558,7 @@ Find byte-identical duplicate ROMs and quarantine the extras into your backup so
 operation can be undone:
 
 ```bash
-python rom_stuffer.py dedup -s "/Volumes/ROMS" -d "/Users/marcus/roms_backup"
+python rom-stuffer.py dedup -s "/Volumes/ROMS" -d "/Users/marcus/roms_backup"
 ```
 
 Preview first with `--dry-run`; removed files are moved (not deleted) into `--dest`
