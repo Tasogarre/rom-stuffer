@@ -53,6 +53,7 @@ class DedupOptions:
     interactive: bool = False
     hard_delete: bool = False
     apply_plan_path: Path | None = None
+    sdcard: Path | None = None
 
 
 # =========================================================================== #
@@ -327,6 +328,8 @@ class DedupMetrics:
     bytes_reclaimed: int = 0
     errors: list = field(default_factory=list)  # [{"file": str, "error": str}]
     dry_run: bool = False
+    sd_files_pruned: int = 0
+    sd_bytes_pruned: int = 0
 
 
 def _load_dedup_journal(dest: Path) -> set[str]:
@@ -479,6 +482,30 @@ def apply_plan(
                         {"file": str(removal.name), "error": describe_error(e)}
                     )
                     get_logger("dedup").warning("failed to remove %s: %s", removal, describe_error(e))
+                    continue
+                # SD-card counterpart pruning: only when removal actually succeeded.
+                if options.sdcard is not None:
+                    try:
+                        card_rel = removal.relative_to(options.source)
+                        card_path = options.sdcard / card_rel
+                        if card_path.exists():
+                            card_size = 0
+                            try:
+                                card_size = card_path.stat().st_size
+                            except OSError:
+                                pass
+                            card_path.unlink()
+                            metrics.sd_files_pruned += 1
+                            metrics.sd_bytes_pruned += card_size
+                    except ValueError:
+                        # removal is not under source; skip card pruning for it
+                        pass
+                    except Exception as e:
+                        get_logger("dedup").warning(
+                            "failed to prune SD counterpart for %s: %s",
+                            removal,
+                            describe_error(e),
+                        )
     finally:
         try:
             os.fsync(fh.fileno())
@@ -504,6 +531,9 @@ def _options_from_args(args: "argparse.Namespace") -> DedupOptions:
     apply_plan_raw = getattr(args, "apply_plan", None)
     apply_plan_path = Path(apply_plan_raw).expanduser() if apply_plan_raw else None
 
+    sdcard_raw = getattr(args, "sdcard", None)
+    sdcard = Path(sdcard_raw).expanduser() if sdcard_raw else None
+
     return DedupOptions(
         source=Path(args.source).expanduser(),
         dest=Path(args.dest).expanduser(),
@@ -516,6 +546,7 @@ def _options_from_args(args: "argparse.Namespace") -> DedupOptions:
         interactive=bool(getattr(args, "interactive", False)),
         hard_delete=bool(getattr(args, "hard_delete", False)),
         apply_plan_path=apply_plan_path,
+        sdcard=sdcard,
     )
 
 

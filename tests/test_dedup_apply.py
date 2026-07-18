@@ -338,6 +338,124 @@ def test_source_mismatch_raises_value_error(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# SD-card pruning tests
+# --------------------------------------------------------------------------- #
+
+def test_sdcard_quarantine_prunes_card_counterparts(tmp_path):
+    """Quarantine mode + sdcard: removed dups' card copies deleted; keeper's stays."""
+    content = b"ROM" * 512
+    tree = RomTree(tmp_path / "src")
+    tree.cartridge("gba", "game.gba", content=content)
+    tree.cartridge("gba/backup", "game.gba", content=content)
+    src = tree.source
+    dest = tmp_path / "dest"
+
+    # Build a fake SD-card mirror: both the keeper copy and the removal copy exist.
+    sd = tmp_path / "sdcard"
+    (sd / "gba").mkdir(parents=True)
+    (sd / "gba" / "game.gba").write_bytes(content)
+    (sd / "gba" / "backup").mkdir(parents=True)
+    (sd / "gba" / "backup" / "game.gba").write_bytes(content)
+
+    keeper = src / "gba" / "game.gba"
+    removal = src / "gba" / "backup" / "game.gba"
+    plan = _plan(src, _group(keeper, [removal]))
+
+    metrics = apply_plan(plan, _opts(src, dest, sdcard=sd))
+
+    # Local: removal quarantined, keeper intact.
+    assert not removal.exists()
+    assert keeper.exists()
+    # SD: removal counterpart deleted; keeper counterpart untouched.
+    assert not (sd / "gba" / "backup" / "game.gba").exists()
+    assert (sd / "gba" / "game.gba").exists()
+    # Metrics.
+    assert metrics.sd_files_pruned == 1
+    assert metrics.sd_bytes_pruned == len(content)
+
+
+def test_sdcard_dry_run_card_untouched(tmp_path):
+    """Dry-run with sdcard set: card is completely untouched, sd_files_pruned == 0."""
+    content = b"ROM" * 512
+    tree = RomTree(tmp_path / "src")
+    tree.cartridge("gba", "game.gba", content=content)
+    tree.cartridge("gba/backup", "game.gba", content=content)
+    src = tree.source
+    dest = tmp_path / "dest"
+
+    sd = tmp_path / "sdcard"
+    (sd / "gba" / "backup").mkdir(parents=True)
+    (sd / "gba" / "backup" / "game.gba").write_bytes(content)
+
+    keeper = src / "gba" / "game.gba"
+    removal = src / "gba" / "backup" / "game.gba"
+    plan = _plan(src, _group(keeper, [removal]))
+
+    metrics = apply_plan(plan, _opts(src, dest, dry_run=True, sdcard=sd))
+
+    # Card completely untouched.
+    assert (sd / "gba" / "backup" / "game.gba").exists()
+    assert metrics.sd_files_pruned == 0
+    assert metrics.sd_bytes_pruned == 0
+    assert metrics.dry_run is True
+
+
+def test_sdcard_hard_delete_prunes_card_counterparts(tmp_path):
+    """hard_delete=True + sdcard: card counterparts of removed files are deleted."""
+    content = b"ROM" * 512
+    tree = RomTree(tmp_path / "src")
+    tree.cartridge("gba", "game.gba", content=content)
+    tree.cartridge("gba/backup", "game.gba", content=content)
+    src = tree.source
+    dest = tmp_path / "dest"
+
+    sd = tmp_path / "sdcard"
+    (sd / "gba" / "backup").mkdir(parents=True)
+    (sd / "gba" / "backup" / "game.gba").write_bytes(content)
+
+    keeper = src / "gba" / "game.gba"
+    removal = src / "gba" / "backup" / "game.gba"
+    plan = _plan(src, _group(keeper, [removal]))
+
+    metrics = apply_plan(plan, _opts(src, dest, hard_delete=True, sdcard=sd))
+
+    assert not removal.exists()
+    assert not (sd / "gba" / "backup" / "game.gba").exists()
+    assert metrics.sd_files_pruned == 1
+    assert metrics.sd_bytes_pruned == len(content)
+
+
+def test_sdcard_none_card_dir_untouched(tmp_path):
+    """No sdcard (None): an existing card dir is completely untouched."""
+    content = b"ROM" * 512
+    tree = RomTree(tmp_path / "src")
+    tree.cartridge("gba", "game.gba", content=content)
+    tree.cartridge("gba/backup", "game.gba", content=content)
+    src = tree.source
+    dest = tmp_path / "dest"
+
+    # Simulate a card directory that EXISTS but was not passed to apply_plan.
+    sd = tmp_path / "sdcard"
+    (sd / "gba" / "backup").mkdir(parents=True)
+    (sd / "gba" / "backup" / "game.gba").write_bytes(content)
+
+    keeper = src / "gba" / "game.gba"
+    removal = src / "gba" / "backup" / "game.gba"
+    plan = _plan(src, _group(keeper, [removal]))
+
+    # sdcard=None (default).
+    metrics = apply_plan(plan, _opts(src, dest))
+
+    # Local removal happened normally.
+    assert not removal.exists()
+    assert keeper.exists()
+    # Card untouched -- no sdcard was given.
+    assert (sd / "gba" / "backup" / "game.gba").exists()
+    assert metrics.sd_files_pruned == 0
+    assert metrics.sd_bytes_pruned == 0
+
+
+# --------------------------------------------------------------------------- #
 # Idempotent: an already-missing removal is recorded as done, not an error
 # --------------------------------------------------------------------------- #
 
