@@ -57,3 +57,5 @@ Everything lives in `compress_roms.py`:
 **No CD-based, N64, NDS, or MAME extensions.** These categories must never be added to `SUPPORTED_EXTENSIONS`. The reasons are documented in inline comments and in `LLM_HANDOVER.md`.
 
 **Sequential SD card writes only.** The 16MB buffer in `fast_sd_copy()` is intentional - parallelizing writes to flash media causes controller thrashing and slower throughput.
+
+**SD sync is a first-class capability (`rom_stuffer/sync.py`).** `sync` mirrors a local library to the card (reusing `fast_sd_copy`); `dedup -sd` prunes removed duplicates from the card; `all` chains dedup -> compress -> sync. The mirror is **destructive by default** (it prunes card files with no local counterpart). Two safety rails are load-bearing and must not be weakened: it refuses to prune when the source scan is empty (a wrong/unmounted source path must never wipe the card), and interactive runs confirm before pruning unless `--yes`/`--dry-run`.

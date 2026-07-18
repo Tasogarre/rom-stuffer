@@ -218,14 +218,25 @@ class TestInteractiveMenu:
     """T2.5 — no-arg interactive menu routes choices correctly."""
 
     def _menu_mocks(self, tmp_path, action: int, dry_run: bool = True):
-        """Return side-effects for Prompt.ask, IntPrompt.ask, Confirm.ask."""
+        """Return side-effects for Prompt.ask, IntPrompt.ask, Confirm.ask.
+
+        Prompt.ask order in the menu: theme, source, [dest if action in 1/2/4],
+        [SD card — required for 3/4, blank-to-skip for 1/2].
+        """
         src = tmp_path / "src"
         dst = tmp_path / "dst"
-        src.mkdir(parents=True, exist_ok=True)
-        dst.mkdir(parents=True, exist_ok=True)
+        sd = tmp_path / "sd"
+        for d in (src, dst, sd):
+            d.mkdir(parents=True, exist_ok=True)
 
-        # Prompt.ask is called: (1) theme choice, (2) source dir, (3) dest dir
-        prompt_values = iter([DEFAULT_THEME, str(src), str(dst)])
+        values = [DEFAULT_THEME, str(src)]
+        if action in (1, 2, 4):
+            values.append(str(dst))
+        if action in (3, 4):
+            values.append(str(sd))
+        elif action in (1, 2):
+            values.append("")  # skip inline SD sync
+        prompt_values = iter(values)
 
         def prompt_side_effect(msg, **kwargs):
             return next(prompt_values)
@@ -236,7 +247,7 @@ class TestInteractiveMenu:
         def confirm_side_effect(msg, **kwargs):
             return dry_run
 
-        return prompt_side_effect, int_prompt_side_effect, confirm_side_effect, src, dst
+        return prompt_side_effect, int_prompt_side_effect, confirm_side_effect, src, dst, sd
 
     def test_no_arg_calls_interactive_menu(self, monkeypatch):
         monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
@@ -247,7 +258,7 @@ class TestInteractiveMenu:
     def test_menu_choice_1_routes_to_compress(self, tmp_path, monkeypatch):
         """Menu choice 1 = Compress: compress_roms should be called."""
         monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
-        prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=1, dry_run=True)
+        prompt_se, int_se, confirm_se, src, dst, sd = self._menu_mocks(tmp_path, action=1, dry_run=True)
 
         with (
             patch.object(cli_mod, "Prompt") as mock_prompt,
@@ -274,7 +285,7 @@ class TestInteractiveMenu:
     def test_menu_choice_2_routes_to_dedup(self, tmp_path, monkeypatch):
         """Menu choice 2 = Find duplicates: _run_dedup should be called."""
         monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
-        prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=2)
+        prompt_se, int_se, confirm_se, src, dst, sd = self._menu_mocks(tmp_path, action=2)
 
         with (
             patch.object(cli_mod, "Prompt") as mock_prompt,
@@ -291,10 +302,10 @@ class TestInteractiveMenu:
 
         mock_dedup.assert_called_once()
 
-    def test_menu_choice_3_routes_to_both(self, tmp_path, monkeypatch):
-        """Menu choice 3 = Both: _run_both should be called (dedup then compress)."""
+    def test_menu_choice_3_routes_to_sync(self, tmp_path, monkeypatch):
+        """Menu choice 3 = Sync to SD card: _run_sync should be called."""
         monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
-        prompt_se, int_se, confirm_se, src, dst = self._menu_mocks(tmp_path, action=3)
+        prompt_se, int_se, confirm_se, src, dst, sd = self._menu_mocks(tmp_path, action=3)
 
         with (
             patch.object(cli_mod, "Prompt") as mock_prompt,
@@ -302,14 +313,34 @@ class TestInteractiveMenu:
             patch.object(cli_mod, "Confirm") as mock_confirm,
             patch.object(cli_mod, "print_header"),
             patch.object(cli_mod, "apply_theme"),
-            patch.object(cli_mod, "_run_both") as mock_both,
+            patch.object(cli_mod, "_run_sync") as mock_sync,
         ):
             mock_prompt.ask.side_effect = prompt_se
             mock_int.ask.side_effect = int_se
             mock_confirm.ask.side_effect = confirm_se
             main()
 
-        mock_both.assert_called_once()
+        mock_sync.assert_called_once()
+
+    def test_menu_choice_4_routes_to_all(self, tmp_path, monkeypatch):
+        """Menu choice 4 = Everything: _run_all should be called."""
+        monkeypatch.setattr(sys, "argv", ["rom-stuffer.py"])
+        prompt_se, int_se, confirm_se, src, dst, sd = self._menu_mocks(tmp_path, action=4)
+
+        with (
+            patch.object(cli_mod, "Prompt") as mock_prompt,
+            patch.object(cli_mod, "IntPrompt") as mock_int,
+            patch.object(cli_mod, "Confirm") as mock_confirm,
+            patch.object(cli_mod, "print_header"),
+            patch.object(cli_mod, "apply_theme"),
+            patch.object(cli_mod, "_run_all") as mock_all,
+        ):
+            mock_prompt.ask.side_effect = prompt_se
+            mock_int.ask.side_effect = int_se
+            mock_confirm.ask.side_effect = confirm_se
+            main()
+
+        mock_all.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

@@ -253,6 +253,75 @@ def compress_roms(
 # Subcommand parser
 # ---------------------------------------------------------------------------
 
+def _add_compress_args(p: argparse.ArgumentParser) -> None:
+    """Attach the compress-specific flags (shared by `compress` and `all`)."""
+    p.add_argument(
+        "-t", "--type", default=None,
+        help="Target a specific file extension, bypassing the interactive prompts (e.g. .gba)",
+    )
+    p.add_argument(
+        "--no-recursive", action="store_true",
+        help="Disable recursive sub-folder scanning",
+    )
+    p.add_argument(
+        "-l", "--level", type=int, default=6, choices=range(1, 10), metavar="1-9",
+        help=(
+            "DEFLATE compression level (1=fastest, 9=smallest). "
+            "Default 6 (Normal) is the recommended balance for RetroArch handhelds."
+        ),
+    )
+
+
+def _add_dedup_args(p: argparse.ArgumentParser) -> None:
+    """Attach the dedup-specific flags (shared by `dedup` and `all`)."""
+    p.add_argument(
+        "--keeper-order", default=None,
+        help=(
+            "Comma-separated folder-name substrings; earlier entries have higher keep priority "
+            "(e.g. 'golden,primary')"
+        ),
+    )
+    p.add_argument(
+        "--protect", action="append", default=[],
+        help="Folder name (substring) whose files are never removed; may be repeated",
+    )
+    p.add_argument(
+        "--per-system", action="store_true",
+        help="Only compare files that share the same top-level system folder",
+    )
+    p.add_argument(
+        "--min-size", type=int, default=0,
+        help="Skip files smaller than N bytes when scanning for duplicates",
+    )
+    p.add_argument(
+        "--interactive", action="store_true",
+        help="Confirm each duplicate group interactively in the TUI before acting",
+    )
+    p.add_argument(
+        "--hard-delete", action="store_true",
+        help="Permanently delete duplicates instead of quarantining them to a backup folder",
+    )
+    p.add_argument(
+        "--apply-plan", default=None,
+        help="Path to a previously saved dedup plan file to apply instead of re-scanning",
+    )
+
+
+def _add_sync_args(p: argparse.ArgumentParser) -> None:
+    """Attach the sync-specific flags (shared by `sync` and `all`)."""
+    p.add_argument(
+        "--no-prune", action="store_true",
+        help=(
+            "Additive sync: copy new/updated files but never delete card files that "
+            "have no local counterpart (default is a full mirror that prunes extras)"
+        ),
+    )
+    p.add_argument(
+        "-y", "--yes", action="store_true",
+        help="Skip the confirmation prompt before a destructive full-mirror prune",
+    )
+
+
 def _build_parser() -> argparse.ArgumentParser:
     """Construct and return the ArgumentParser with shared parent + subparsers.
 
@@ -295,7 +364,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     parser = argparse.ArgumentParser(
-        prog="rom_stuffer.py",
+        prog="rom-stuffer.py",
         description="Recursively compress ROM files to .zip and move the originals.",
         epilog=(
             "WARNING: Only use this script for cartridge-based systems (NES, SNES, GBA, etc). "
@@ -310,21 +379,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Compress ROM files into individual .zip archives",
         description="Compress ROM files to .zip and move originals to the backup destination.",
     )
-    compress_p.add_argument(
-        "-t", "--type", default=None,
-        help="Target a specific file extension, bypassing the interactive prompts (e.g. .gba)",
-    )
-    compress_p.add_argument(
-        "--no-recursive", action="store_true",
-        help="Disable recursive sub-folder scanning",
-    )
-    compress_p.add_argument(
-        "-l", "--level", type=int, default=6, choices=range(1, 10), metavar="1-9",
-        help=(
-            "DEFLATE compression level (1=fastest, 9=smallest). "
-            "Default 6 (Normal) is the recommended balance for RetroArch handhelds."
-        ),
-    )
+    _add_compress_args(compress_p)
 
     dedup_p = subparsers.add_parser(
         "dedup",
@@ -332,37 +387,7 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Find and remove duplicate ROM files",
         description="Detect byte-identical ROM duplicates and generate a removal plan.",
     )
-    dedup_p.add_argument(
-        "--keeper-order", default=None,
-        help=(
-            "Comma-separated folder-name substrings; earlier entries have higher keep priority "
-            "(e.g. 'golden,primary')"
-        ),
-    )
-    dedup_p.add_argument(
-        "--protect", action="append", default=[],
-        help="Folder name (substring) whose files are never removed; may be repeated",
-    )
-    dedup_p.add_argument(
-        "--per-system", action="store_true",
-        help="Only compare files that share the same top-level system folder",
-    )
-    dedup_p.add_argument(
-        "--min-size", type=int, default=0,
-        help="Skip files smaller than N bytes when scanning for duplicates",
-    )
-    dedup_p.add_argument(
-        "--interactive", action="store_true",
-        help="Confirm each duplicate group interactively in the TUI before acting",
-    )
-    dedup_p.add_argument(
-        "--hard-delete", action="store_true",
-        help="Permanently delete duplicates instead of quarantining them to a backup folder",
-    )
-    dedup_p.add_argument(
-        "--apply-plan", default=None,
-        help="Path to a previously saved dedup plan file to apply instead of re-scanning",
-    )
+    _add_dedup_args(dedup_p)
 
     estimate_p = subparsers.add_parser(
         "estimate",
@@ -378,6 +403,34 @@ def _build_parser() -> argparse.ArgumentParser:
         "--per-system", action="store_true", default=True,
         help="Group the estimate by system folder (default)",
     )
+
+    sync_p = subparsers.add_parser(
+        "sync",
+        parents=[parent],
+        help="Mirror a local ROM library to the SD card (full mirror by default)",
+        description=(
+            "Sync a local ROM library (-s) to the SD card (-sd). Full mirror by default: "
+            "card files with no local counterpart are pruned. Sequential writes only."
+        ),
+    )
+    _add_sync_args(sync_p)
+    sync_p.add_argument(
+        "--no-recursive", action="store_true",
+        help="Sync only the top-level source folder",
+    )
+
+    all_p = subparsers.add_parser(
+        "all",
+        parents=[parent],
+        help="Run the whole pipeline: de-duplicate, compress, then sync to the SD card",
+        description=(
+            "De-duplicate, then compress, then mirror the result to the SD card (-sd) "
+            "in one pass. Each stage can also be run on its own."
+        ),
+    )
+    _add_dedup_args(all_p)
+    _add_compress_args(all_p)
+    _add_sync_args(all_p)
 
     return parser
 
@@ -431,10 +484,51 @@ def _run_dedup(args: argparse.Namespace) -> None:
         )
 
 
-def _run_both(args: argparse.Namespace) -> None:
-    """De-duplicate first, then compress the surviving files."""
+def _run_sync(args: argparse.Namespace) -> None:
+    """Mirror a local ROM library to the SD card.
+
+    Prompts for source / SD-card path if absent. A full-mirror prune (the
+    default) deletes card files with no local counterpart, so it asks for
+    confirmation first unless --yes is passed or it is a dry-run.
+    """
+    if not args.source:
+        args.source = Prompt.ask("[accent]Source[/accent] local ROM library to sync from").strip()
+    if not args.sdcard:
+        args.sdcard = Prompt.ask("[accent]SD card[/accent] directory to sync to").strip()
+
+    prune = not getattr(args, "no_prune", False)
+    if prune and not args.dry_run and not getattr(args, "yes", False):
+        console.print(
+            "[warn]Full mirror:[/warn] files on the SD card with no local counterpart "
+            "will be [danger]deleted[/danger]."
+        )
+        if not Confirm.ask("Proceed with the mirror (including pruning extras)?", default=False):
+            console.print("[muted]Cancelled.[/muted]")
+            return
+
+    from rom_stuffer.sync import run_sync  # noqa: PLC0415
+    get_logger("sync").info("sync source=%s sdcard=%s prune=%s", args.source, args.sdcard, prune)
+    run_sync(args)
+
+
+def _run_all(args: argparse.Namespace) -> None:
+    """Run the full pipeline: de-duplicate -> compress -> sync to the SD card.
+
+    De-dup and compress operate on the local tree; the final sync mirrors the
+    finished local library to the card in one pass (so it also prunes anything
+    the earlier stages removed). Skips the sync stage when no SD card is given.
+    """
+    sdcard = args.sdcard
+    # Run the local stages without inline SD sync; the final mirror reconciles the card.
+    args.sdcard = None
     _run_dedup(args)
     _run_compress(args)
+    args.sdcard = sdcard
+
+    if sdcard:
+        _run_sync(args)
+    else:
+        console.print("[muted]No SD card given (-sd); ran de-duplicate + compress only.[/muted]")
 
 
 def _interactive_menu() -> None:
@@ -456,21 +550,38 @@ def _interactive_menu() -> None:
         console.print("\n[bold]What would you like to do?[/bold]\n")
         console.print("  [1]  Compress ROMs")
         console.print("  [2]  Find duplicates")
-        console.print("  [3]  Both  (de-duplicate first, then compress)\n")
+        console.print("  [3]  Sync to SD card  (mirror a local library to the card)")
+        console.print("  [4]  Everything  (de-duplicate → compress → sync)\n")
 
         action = IntPrompt.ask("Choose", default=1)
-        while action not in (1, 2, 3):
-            console.print("  [warn]Please choose 1, 2, or 3.[/warn]")
+        while action not in (1, 2, 3, 4):
+            console.print("  [warn]Please choose 1, 2, 3, or 4.[/warn]")
             action = IntPrompt.ask("Choose", default=1)
 
         source = Prompt.ask("[accent]Source[/accent] directory").strip()
-        dest = Prompt.ask("[accent]Destination[/accent] directory").strip()
+
+        # Destination (backup) is needed for everything except a pure sync.
+        dest = ""
+        if action in (1, 2, 4):
+            dest = Prompt.ask("[accent]Destination[/accent] directory").strip()
+
+        # SD card: required for sync/everything, optional (inline) for compress/dedup.
+        sdcard: str | None = None
+        if action in (3, 4):
+            sdcard = Prompt.ask("[accent]SD card[/accent] directory").strip()
+        else:
+            sd_in = Prompt.ask(
+                "[accent]SD card[/accent] directory [muted](blank to skip)[/muted]",
+                default="",
+            ).strip()
+            sdcard = sd_in or None
+
         dry_run = Confirm.ask("Dry run?", default=False)
 
         ns = argparse.Namespace(
             source=source,
             dest=dest,
-            sdcard=None,
+            sdcard=sdcard,
             dry_run=dry_run,
             resume=False,
             fresh=False,
@@ -486,14 +597,19 @@ def _interactive_menu() -> None:
             interactive=False,
             hard_delete=False,
             apply_plan=None,
+            # sync-specific defaults
+            no_prune=False,
+            yes=False,
         )
 
         if action == 1:
             _run_compress(ns)
         elif action == 2:
             _run_dedup(ns)
+        elif action == 3:
+            _run_sync(ns)
         else:
-            _run_both(ns)
+            _run_all(ns)
 
     except KeyboardInterrupt:
         console.print("\n[muted]Goodbye.[/muted]")
@@ -542,6 +658,10 @@ def main() -> None:
             _run_dedup(args)
         elif args.subcommand == "estimate":
             _run_estimate(args)
+        elif args.subcommand == "sync":
+            _run_sync(args)
+        elif args.subcommand == "all":
+            _run_all(args)
         else:
             _build_parser().print_help()
             sys.exit(1)

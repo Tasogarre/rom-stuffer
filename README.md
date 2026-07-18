@@ -19,7 +19,10 @@
 
 - **`compress`** — pack each ROM into its own highly-compatible `.zip`, moving the originals to a backup while preserving your folder structure.
 - **`dedup`** — find byte-identical duplicate ROMs and quarantine the extras (reversible by default).
+- **`sync`** — mirror your local ROM library to the SD card (full mirror: new/updated files copied, stale card files pruned).
 - **`estimate`** — report, per system and in total, how much space a library will take once compressed and de-duplicated.
+
+Each runs on its own, or chain all three with the **`all`** pipeline (de-duplicate → compress → sync). The no-argument menu drives every one of these interactively.
 
 It is built for preparing SD cards for retro handheld consoles (R36S, R36XX, Ayn Thor, Miyoo Mini, etc.) running RetroArch-based systems (ArkOS, AmberELEC, OnionOS).
 
@@ -114,7 +117,9 @@ through picking a command.
 | --- | --- |
 | [`compress`](#usage) | Pack each ROM into its own `.zip`, back up the originals. |
 | [`dedup`](#de-duplication) | Find byte-identical duplicate ROMs and quarantine the extras. |
+| [`sync`](#syncing-to-the-sd-card) | Mirror your local library to the SD card (copies new/updated, prunes stale). |
 | [`estimate`](#estimating-space) | Report per-system and total space the library will need. |
+| `all` | Run the whole pipeline in one shot: de-duplicate → compress → sync. |
 
 > **Windows users:** Use `python` or `py` instead of `python3`, and wrap paths in double quotes:
 > `python rom-stuffer.py compress --source "E:\ROMS" --dest "D:\RetroBackups"`
@@ -311,6 +316,61 @@ python rom-stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup"
 python rom-stuffer.py dedup -s "/path/to/roms" -d "/path/to/backup" \
   --per-system --min-size 64k --protect "**/Favorites/**"
 ```
+
+The `dedup` command also takes `-sd` — when you point it at your card, removing a
+local duplicate drops that file's counterpart from the card too, so a de-dupe keeps
+the card in step. (Keepers are never removed, from disk or card.)
+
+---
+
+## Syncing to the SD card
+
+`sync` mirrors a local ROM library to the card. It's the standalone version of the
+inline sync that `compress -sd` has always done — useful for pushing an
+already-compressed library, or reconciling the card after a de-dupe.
+
+It is a **full mirror by default**: files new or updated locally are copied (skipping
+anything already identical on the card), and files on the card that no longer exist
+locally are **pruned**. Writes are sequential (the 4 MB buffered, fsync'd copy tuned
+for flash media — never parallelized).
+
+```bash
+# Mirror the local library onto the card (asks to confirm before pruning)
+python rom-stuffer.py sync -s "/path/to/roms" -sd "/Volumes/SDCARD"
+
+# Preview exactly what would be copied and pruned — touches nothing
+python rom-stuffer.py sync -s "/path/to/roms" -sd "/Volumes/SDCARD" --dry-run
+
+# Additive only: copy new/updated, but never delete anything from the card
+python rom-stuffer.py sync -s "/path/to/roms" -sd "/Volumes/SDCARD" --no-prune
+```
+
+| Argument | Description |
+| :--- | :--- |
+| `--source` / `-s` | **(Required)** Local ROM library to mirror **from**. |
+| `--sdcard` / `-sd` | **(Required)** SD-card directory to mirror **to**. |
+| `--no-prune` | Additive sync — copy new/updated files but never delete card files with no local counterpart. |
+| `--dry-run` | Preview copies and prunes; change nothing. |
+| `-y` / `--yes` | Skip the confirmation prompt before a destructive full-mirror prune. |
+| `--no-recursive` | Sync only the top-level source folder. |
+
+**Safety rails on the destructive default.** Because a full mirror deletes card
+files, `sync` asks you to confirm before pruning (unless `--dry-run` or `--yes`), and
+it **refuses to prune when the source scan finds no files** — so a mistyped or
+unmounted source path can never wipe the card.
+
+### The `all` pipeline
+
+Chain everything in one command: de-duplicate, then compress, then mirror the finished
+library to the card.
+
+```bash
+python rom-stuffer.py all -s "/path/to/roms" -d "/path/to/backup" -sd "/Volumes/SDCARD"
+```
+
+It accepts every `dedup` and `compress` flag, plus the `sync` flags above. Omit `-sd`
+to run just de-duplicate → compress. Or skip the flags entirely and pick **Everything**
+from the interactive menu.
 
 ---
 
