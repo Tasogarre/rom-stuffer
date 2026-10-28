@@ -31,7 +31,24 @@ python compress_roms.py -s "/path/to/roms" -d "/path/to/backup" -sd "/Volumes/SD
 python compress_roms.py -s "/path/to/roms" -d "/path/to/backup" --dry-run
 ```
 
-There are no tests, no build step, and no linter configured.
+## Offline verification
+
+The repository has a pytest suite under `tests/`, configured by `pyproject.toml`.
+Install development requirements into a task-owned virtual environment, then run:
+
+```bash
+python -m pip install -r requirements.txt -r requirements-dev.txt
+python -m pytest
+```
+
+The suite uses synthetic temporary files and covers the CLI, cartridge/disc and
+BIOS guards, collisions, resume, deduplication, planning and SD-sync safety.
+A focused `python -m pytest tests/test_sync.py` run is partial feedback, not the
+complete suite. Preserve the empty-source prune refusal and confirmation guards.
+Never point verification at the owner's ROM library or mounted card.
+
+There is no build step or configured linter. Do not add CI or a signing shortcut
+without a measured need.
 
 ## Architecture
 
